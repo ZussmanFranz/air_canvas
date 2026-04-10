@@ -14,6 +14,11 @@ int main(int, char**){
     while(true)
     {
         cap >> frame;
+
+        // We flip the image to better control our drawing.
+        // 1 is a flip flag. Positive value means "flip around Y-axis".
+        flip(frame, frame, 1);
+        
         imshow("capture", frame);
         if(waitKey(30) >= 0) break;
     }
