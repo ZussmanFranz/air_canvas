@@ -25,8 +25,8 @@ int main(int, char**){
     if(!cap.isOpened()) return -1;
  
     namedWindow("capture", WINDOW_NORMAL);
-    namedWindow("mask", WINDOW_NORMAL);
     namedWindow("HSV boundaries", WINDOW_NORMAL);
+    namedWindow("mask", WINDOW_NORMAL);
 
 
     createTrackbar("Hue min", "HSV boundaries", &hue_min_slider, HUE_SLIDER_MAX, nullptr);
@@ -56,6 +56,16 @@ int main(int, char**){
         
         // create a mask of white pixels fitting in boundaries
         inRange(hsv_frame, lower_bound, upper_bound, mask);
+
+
+        // kernel for erode and dilate iterations
+        Mat kernel = getStructuringElement(MORPH_ELLIPSE, Size(5,5));
+
+        // erode - remove "weak" parts of mask
+        erode(mask, mask, kernel, Point(-1,-1), 1);
+
+        // dilate - make everything that is left stronger and more consistent
+        dilate(mask, mask, kernel, Point(-1,-1), 3);  // more iterations to make pointer stronger
 
         imshow("mask", mask);
 
