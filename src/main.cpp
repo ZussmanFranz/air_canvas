@@ -28,8 +28,8 @@ int main(int, char**){
     if(!cap.isOpened()) return -1;
  
     namedWindow("HSV boundaries", WINDOW_NORMAL);
-    namedWindow("capture", WINDOW_NORMAL);
     namedWindow("mask", WINDOW_NORMAL);
+    namedWindow("capture", WINDOW_NORMAL);
 
 
     createTrackbar("Hue min", "HSV boundaries", &hue_min_slider, HUE_SLIDER_MAX, nullptr);
@@ -42,6 +42,13 @@ int main(int, char**){
     createTrackbar("Value max", "HSV boundaries", &val_max_slider, VAL_SLIDER_MAX, nullptr);
 
     Mat frame, display_frame, hsv_frame, mask;
+
+    // smoothing logic for flickering "cursor"
+    int prev_x = -1;
+    int prev_y = -1;
+    int frames_lost = 0;
+    const int MAX_FRAMES_LOST = 10;  // how long do we remember the position
+    const float SMOOTHING = 0.35f;   // smoothing factor (from 0.1 to 1.0)
 
     while(true)
     {
@@ -79,6 +86,8 @@ int main(int, char**){
 
         findContours(mask, contours, hierarchy, RETR_EXTERNAL, CHAIN_APPROX_SIMPLE);
 
+        bool cursor_found = false;
+
         if (!contours.empty()){
 
             double max_area = 0;
@@ -98,13 +107,35 @@ int main(int, char**){
 
                 // calculate it's central coordinates
                 if (m.m00 > 0) {
-                    int x = m.m10 / m.m00;
-                    int y = m.m01 / m.m00;
+                    cursor_found = true;
+                    frames_lost = 0;
 
-                    // display a circle on those coordinates
-                    circle(display_frame, Point(x, y), 10, Scalar(255, 0, 0), 2);
+                    int target_x = m.m10 / m.m00;
+                    int target_y = m.m01 / m.m00;
+
+                    if (prev_x == -1) {
+                        // It's first time when we see the cursor, just teleport there
+                        prev_x = target_x;
+                        prev_y = target_y;
+                    } else {
+                        // smoothing between current and previous position
+                        prev_x = prev_x + SMOOTHING * (target_x - prev_x);
+                        prev_y = prev_y + SMOOTHING * (target_y - prev_y);
+                    }
                 }
             }
+        }
+
+        if (!cursor_found){
+            frames_lost++;
+            if (frames_lost > MAX_FRAMES_LOST){
+                prev_x = -1;
+                prev_y = -1;
+            }
+        }
+
+        if (prev_x != -1 && prev_y != -1){
+            circle(display_frame, Point(prev_x, prev_y), 10, Scalar(255, 0, 0), 2);
         }
 
         imshow("mask", mask);
