@@ -21,7 +21,7 @@ const int VAL_SLIDER_MAX = 255;
 int val_min_slider = 90;
 int val_max_slider = VAL_SLIDER_MAX;
 
-const int CONTOUR_AREA_TRESHOLD = 200;
+const int CONTOUR_AREA_TRESHOLD = 625;
 
 int main(int, char**){
     VideoCapture cap(0, CAP_V4L2);
