@@ -24,8 +24,13 @@ int val_max_slider = VAL_SLIDER_MAX;
 const int CONTOUR_AREA_TRESHOLD = 200;
 
 int main(int, char**){
-    VideoCapture cap(0);
+    VideoCapture cap(0, CAP_V4L2);
     if(!cap.isOpened()) return -1;
+
+    cap.set(CAP_PROP_FOURCC, VideoWriter::fourcc('M', 'J', 'P', 'G'));
+
+    cap.set(CAP_PROP_FRAME_WIDTH, 1280);
+    cap.set(CAP_PROP_FRAME_HEIGHT, 720);
  
     namedWindow("HSV boundaries", WINDOW_NORMAL);
     namedWindow("mask", WINDOW_NORMAL);
@@ -53,6 +58,10 @@ int main(int, char**){
     while(true)
     {
         cap >> frame;
+        if (frame.empty()) {
+           std::cout << "WARNING: skipped frame from the camera" << std::endl;
+           continue;
+        }
 
         // flip the image to better control our drawing.
         // 1 is a flip flag. Positive value means "flip around Y-axis".
