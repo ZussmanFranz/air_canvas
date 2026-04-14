@@ -48,9 +48,21 @@ int main(int, char**){
 
     Mat frame, display_frame, hsv_frame, mask;
 
+    Mat canvas, canvas_mask;
+
+    cap >> frame;
+    if (frame.empty()) return -1;
+
+    // we will be drawing on this canvas, but now it is empty (black)
+    canvas = Mat::zeros(frame.size(), CV_8UC3);
+
     // smoothing logic for flickering "cursor"
     int prev_x = -1;
     int prev_y = -1;
+
+    int smoothed_x = -1;
+    int smoothed_y = -1;
+
     int frames_lost = 0;
     const int MAX_FRAMES_LOST = 10;  // how long do we remember the position
     const float SMOOTHING = 0.35f;   // smoothing factor (from 0.1 to 1.0)
@@ -128,8 +140,14 @@ int main(int, char**){
                         prev_y = target_y;
                     } else {
                         // smoothing between current and previous position
-                        prev_x = prev_x + SMOOTHING * (target_x - prev_x);
-                        prev_y = prev_y + SMOOTHING * (target_y - prev_y);
+                        smoothed_x = prev_x + SMOOTHING * (target_x - prev_x);
+                        smoothed_y = prev_y + SMOOTHING * (target_y - prev_y);
+
+                        // draw a new smoothed line on canvas
+                        line(canvas, Point(prev_x, prev_y), Point(smoothed_x, smoothed_y), Scalar(255, 0, 0), 5);
+
+                        prev_x = smoothed_x;
+                        prev_y = smoothed_y;
                     }
                 }
             }
@@ -146,6 +164,23 @@ int main(int, char**){
         if (prev_x != -1 && prev_y != -1){
             circle(display_frame, Point(prev_x, prev_y), 10, Scalar(255, 0, 0), 2);
         }
+
+        // adding drawing from canvas to display frame
+        
+        // convert canvas to grayscale
+        cvtColor(canvas, canvas_mask, COLOR_BGR2GRAY);
+
+        // everything not black becomes white
+        threshold(canvas_mask, canvas_mask, 1, 255, THRESH_BINARY);
+
+        // invert the mask
+        bitwise_not(canvas_mask, canvas_mask);
+
+        // crop the drawing area from frame
+        bitwise_and(display_frame, display_frame, display_frame, canvas_mask);
+
+        // add the drawing to the frame
+        display_frame += canvas;
 
         imshow("mask", mask);
 
