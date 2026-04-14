@@ -67,6 +67,10 @@ int main(int, char**){
     const int MAX_FRAMES_LOST = 10;  // how long do we remember the position
     const float SMOOTHING = 0.35f;   // smoothing factor (from 0.1 to 1.0)
 
+    int key_pressed = -1;
+
+    bool capture_drawing = false;
+
     while(true)
     {
         cap >> frame;
@@ -143,8 +147,10 @@ int main(int, char**){
                         smoothed_x = prev_x + SMOOTHING * (target_x - prev_x);
                         smoothed_y = prev_y + SMOOTHING * (target_y - prev_y);
 
-                        // draw a new smoothed line on canvas
-                        line(canvas, Point(prev_x, prev_y), Point(smoothed_x, smoothed_y), Scalar(255, 0, 0), 5);
+                        if (capture_drawing){
+                            // draw a new smoothed line on canvas
+                            line(canvas, Point(prev_x, prev_y), Point(smoothed_x, smoothed_y), Scalar(255, 0, 0), 5);
+                        }
 
                         prev_x = smoothed_x;
                         prev_y = smoothed_y;
@@ -186,7 +192,18 @@ int main(int, char**){
 
         imshow("capture", display_frame);
         
-        if(waitKey(30) >= 0) break;
+        key_pressed = waitKey(30);
+
+        // 27 == Esc
+        if(key_pressed == 27) break;
+        if(key_pressed == 32) {
+            // reset previous position
+            prev_x = -1;
+            prev_y = -1;
+
+            // toggle drawing mode
+            capture_drawing = !capture_drawing;
+        }
     }
     return 0;
 }
