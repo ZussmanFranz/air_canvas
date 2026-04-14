@@ -24,6 +24,7 @@ int val_max_slider = VAL_SLIDER_MAX;
 const int CONTOUR_AREA_TRESHOLD = 625;
 
 void overlay_mats(const Mat& top_layer, const Mat& bottom_layer, Mat& output_mat);
+bool check_move(Point prev_pos, Point current_pos, int move_treshold);
 
 int main(int, char**){
     VideoCapture cap(0, CAP_V4L2);
@@ -72,6 +73,15 @@ int main(int, char**){
     int key_pressed = -1;
 
     bool capture_drawing = false;
+
+    Point radial_center;
+    int radial_spawn_time = -1;
+    const int RADIAL_LIFETIME_SECONDS = 10;
+    const int RADIAL_MOVE_TRESHOLD = 2;
+    const int RADIAL_SPAWN_SECONDS = 4;
+    bool is_moving = true;
+    int stop_time = -1;
+
     
     while(true)
     {
@@ -154,6 +164,22 @@ int main(int, char**){
                             line(canvas, Point(prev_x, prev_y), Point(smoothed_x, smoothed_y), Scalar(255, 0, 0), 5);
                         }
 
+                        if (!check_move(Point(prev_x, prev_y), Point(smoothed_x, smoothed_y), RADIAL_MOVE_TRESHOLD)){
+                            if (is_moving){
+                                is_moving = false;
+                                stop_time = getTickCount();
+                            }
+
+                            if ((getTickCount() - stop_time) > RADIAL_SPAWN_SECONDS * getTickFrequency()) {
+                                // PLACEHOLDER LOGIC
+                                stop_time = getTickCount();
+                                ellipse(canvas, Point(smoothed_x, smoothed_y), Size(30, 30), 0, 0, 360, Scalar(0, 255, 255), 2);
+                            }
+                        } else {
+                            is_moving = true;
+                            stop_time = -1;
+                        }
+
                         prev_x = smoothed_x;
                         prev_y = smoothed_y;
                     }
@@ -170,7 +196,8 @@ int main(int, char**){
         }
 
         if (prev_x != -1 && prev_y != -1){
-            circle(display_frame, Point(prev_x, prev_y), 10, Scalar(255, 0, 0), 2);
+            if (is_moving) circle(display_frame, Point(prev_x, prev_y), 10, Scalar(255, 0, 0), 2);
+            else circle(display_frame, Point(prev_x, prev_y), 10, Scalar(0, 0, 255), 2);
         }
 
         // adding drawing from canvas to display frame
@@ -202,7 +229,7 @@ void overlay_mats(const Mat& top_layer, const Mat& bottom_layer, Mat& output_mat
     /*
         Overlays mats. Puts non-black pixels of top layer on bottom layer.
     */
-    
+
     Mat top_mask;
 
     // copy bottom_layer content to output_mat
@@ -222,4 +249,8 @@ void overlay_mats(const Mat& top_layer, const Mat& bottom_layer, Mat& output_mat
 
     // add top layer to the bottom layer
     output_mat += top_layer;
+}
+
+bool check_move(Point prev_pos, Point current_pos, int move_treshold){
+    return norm(current_pos - prev_pos) > move_treshold;
 }
