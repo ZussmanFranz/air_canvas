@@ -23,6 +23,8 @@ int val_max_slider = VAL_SLIDER_MAX;
 
 const int CONTOUR_AREA_TRESHOLD = 625;
 
+void overlay_mats(const Mat& top_layer, const Mat& bottom_layer, Mat& output_mat);
+
 int main(int, char**){
     VideoCapture cap(0, CAP_V4L2);
     if(!cap.isOpened()) return -1;
@@ -70,7 +72,7 @@ int main(int, char**){
     int key_pressed = -1;
 
     bool capture_drawing = false;
-
+    
     while(true)
     {
         cap >> frame;
@@ -172,21 +174,8 @@ int main(int, char**){
         }
 
         // adding drawing from canvas to display frame
-        
-        // convert canvas to grayscale
-        cvtColor(canvas, canvas_mask, COLOR_BGR2GRAY);
 
-        // everything not black becomes white
-        threshold(canvas_mask, canvas_mask, 1, 255, THRESH_BINARY);
-
-        // invert the mask
-        bitwise_not(canvas_mask, canvas_mask);
-
-        // crop the drawing area from frame
-        bitwise_and(display_frame, display_frame, display_frame, canvas_mask);
-
-        // add the drawing to the frame
-        display_frame += canvas;
+        overlay_mats(canvas, display_frame, display_frame);
 
         imshow("mask", mask);
 
@@ -206,4 +195,31 @@ int main(int, char**){
         }
     }
     return 0;
+}
+
+
+void overlay_mats(const Mat& top_layer, const Mat& bottom_layer, Mat& output_mat) {
+    /*
+        Overlays mats. Puts non-black pixels of top layer on bottom layer.
+    */
+    
+    Mat top_mask;
+
+    // copy bottom_layer content to output_mat
+    output_mat = bottom_layer.clone();
+
+    // convert top_layer to grayscale
+    cvtColor(top_layer, top_mask, COLOR_BGR2GRAY);
+
+    // everything not black becomes white
+    threshold(top_mask, top_mask, 0, 255, THRESH_BINARY);
+
+    // invert the mask
+    bitwise_not(top_mask, top_mask);
+
+    // crop the overlay area from bottom layer
+    bitwise_and(output_mat, output_mat, output_mat, top_mask);
+
+    // add top layer to the bottom layer
+    output_mat += top_layer;
 }
