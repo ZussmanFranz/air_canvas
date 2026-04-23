@@ -79,15 +79,18 @@ int main(int, char**){
     const int RADIAL_LIFETIME_SECONDS = 10;
     const int RADIAL_MOVE_TRESHOLD = 2;
     const int RADIAL_SPAWN_SECONDS = 4;
+    double RADIAL_SPAWN_TICKS = RADIAL_SPAWN_SECONDS * getTickFrequency();
     bool is_moving = true;
-    int stop_time = -1;
+    double stop_time = -1;
 
     
+
+
     while(true)
     {
         cap >> frame;
         if (frame.empty()) {
-           std::cout << "WARNING: skipped frame from the camera" << std::endl;
+           cout << "WARNING: skipped frame from the camera" << endl;
            continue;
         }
 
@@ -168,10 +171,12 @@ int main(int, char**){
                             if (is_moving){
                                 is_moving = false;
                                 stop_time = getTickCount();
+                                cout << "Start!" << endl;
                             }
 
-                            if ((getTickCount() - stop_time) > RADIAL_SPAWN_SECONDS * getTickFrequency()) {
+                            if ((double)(getTickCount() - stop_time) > RADIAL_SPAWN_TICKS) {
                                 // PLACEHOLDER LOGIC
+                                cout << "Stop! (" << (double)(getTickCount() - stop_time) / getTickFrequency() << "s)\n";
                                 stop_time = getTickCount();
                                 ellipse(canvas, Point(smoothed_x, smoothed_y), Size(30, 30), 0, 0, 360, Scalar(0, 255, 255), 2);
                             }
