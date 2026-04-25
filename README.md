@@ -1,11 +1,11 @@
-# Air Canvas CV
+# Air Canvas
 
 This project's goal is to get familiar with OpenCV C++ library in a fun and simple way.
 
 ## Project structure
 
 ```text
-air_canvas_cv/
+air_canvas/
 ├── CMakeLists.txt          # Project build file
 ├── README.md
 ├── .gitignore
