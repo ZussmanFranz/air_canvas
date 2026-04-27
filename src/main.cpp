@@ -71,13 +71,14 @@ int main(int, char**){
 
     Mat frame, display_frame, hsv_frame, mask;
 
-    Mat canvas, canvas_mask;
+    Mat canvas, canvas_mask, radial_canvas;
 
     cap >> frame;
     if (frame.empty()) return -1;
 
     // we will be drawing on this canvas, but now it is empty (black)
     canvas = Mat::zeros(frame.size(), CV_8UC3);
+    radial_canvas = Mat::zeros(frame.size(), CV_8UC3);
 
     // smoothing logic for flickering cursor
     int prev_x = -1;
@@ -199,23 +200,26 @@ int main(int, char**){
                                 stop_time = getTickCount();
                                 radial_center = Point(smoothed_x, smoothed_y);
 
-                                draw_colorwheel(canvas, radial_center, RADIAL_SIZE, RADIAL_SIZE / 3, radial_colors);
+                                draw_colorwheel(radial_canvas, radial_center, RADIAL_SIZE, RADIAL_SIZE / 3, radial_colors);
                                 
                                 radial_state = WAIT_CHOICE;
-                            } else if (radial_state == WAIT_CHOICE) {
-                                // did cursor go out of radial menu?
-
-                                if (check_move(Point(smoothed_x, smoothed_y), radial_center, RADIAL_SIZE)) {
-                                    // clear radial menu
-
-                                    // change color
-
-                                    radial_state= WAIT_SPAWN;
-                                }
-                            }
+                            } 
                         } else {
                             is_moving = true;
                             stop_time = -1;
+                        }
+
+                        if (radial_state == WAIT_CHOICE) {
+                            // did cursor go out of radial menu?
+
+                            if (check_move(Point(smoothed_x, smoothed_y), radial_center, RADIAL_SIZE)) {
+                                // clear radial menu
+                                radial_canvas = Scalar(0,0,0);
+
+                                // change color
+
+                                radial_state= WAIT_SPAWN;
+                            }
                         }
 
                         prev_x = smoothed_x;
@@ -241,6 +245,7 @@ int main(int, char**){
         // adding drawing from canvas to display frame
 
         overlay_mats(canvas, display_frame, display_frame);
+        overlay_mats(radial_canvas, display_frame, display_frame);
 
         imshow("mask", mask);
 
