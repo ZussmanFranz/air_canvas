@@ -9,6 +9,13 @@
 using namespace cv;
 using namespace std;
 
+enum RADIAL_STATE {
+    WAIT_SPAWN,
+    WAIT_CHOICE
+};
+
+RADIAL_STATE radial_state = WAIT_SPAWN;
+
 const int HUE_SLIDER_MAX = 179;
 int hue_min_slider = 112;
 int hue_max_slider = HUE_SLIDER_MAX;
@@ -25,6 +32,7 @@ const int CONTOUR_AREA_TRESHOLD = 625;
 
 void overlay_mats(const Mat& top_layer, const Mat& bottom_layer, Mat& output_mat);
 bool check_move(Point prev_pos, Point current_pos, int move_treshold);
+
 
 int main(int, char**){
     VideoCapture cap(0, CAP_V4L2);
@@ -59,7 +67,7 @@ int main(int, char**){
     // we will be drawing on this canvas, but now it is empty (black)
     canvas = Mat::zeros(frame.size(), CV_8UC3);
 
-    // smoothing logic for flickering "cursor"
+    // smoothing logic for flickering cursor
     int prev_x = -1;
     int prev_y = -1;
 
@@ -80,6 +88,7 @@ int main(int, char**){
     const int RADIAL_MOVE_TRESHOLD = 2;
     const int RADIAL_SPAWN_SECONDS = 4;
     double RADIAL_SPAWN_TICKS = RADIAL_SPAWN_SECONDS * getTickFrequency();
+    const int RADIAL_SIZE = 60;
     bool is_moving = true;
     double stop_time = -1;
 
@@ -171,14 +180,25 @@ int main(int, char**){
                             if (is_moving){
                                 is_moving = false;
                                 stop_time = getTickCount();
-                                cout << "Start!" << endl;
                             }
 
-                            if ((double)(getTickCount() - stop_time) > RADIAL_SPAWN_TICKS) {
+                            if ((radial_state == WAIT_SPAWN) && ((double)(getTickCount() - stop_time) > RADIAL_SPAWN_TICKS)) {
                                 // PLACEHOLDER LOGIC
-                                cout << "Stop! (" << (double)(getTickCount() - stop_time) / getTickFrequency() << "s)\n";
                                 stop_time = getTickCount();
-                                ellipse(canvas, Point(smoothed_x, smoothed_y), Size(30, 30), 0, 0, 360, Scalar(0, 255, 255), 2);
+                                radial_center = Point(smoothed_x, smoothed_y);
+                                ellipse(canvas, radial_center, Size(RADIAL_SIZE, RADIAL_SIZE), 0, 0, 360, Scalar(0, 255, 255), 2);
+                                
+                                radial_state = WAIT_CHOICE;
+                            } else if (radial_state == WAIT_CHOICE) {
+                                // did cursor go out of radial menu?
+
+                                if (check_move(Point(smoothed_x, smoothed_y), radial_center, RADIAL_SIZE)) {
+                                    // clear radial menu
+
+                                    // change color
+
+                                    radial_state= WAIT_SPAWN;
+                                }
                             }
                         } else {
                             is_moving = true;
