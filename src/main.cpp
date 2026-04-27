@@ -5,9 +5,13 @@
 #include "opencv2/imgcodecs.hpp"
 #include "opencv2/imgproc.hpp"
 #include "opencv2/highgui.hpp"
+#include <opencv2/viz/types.hpp>
 
 using namespace cv;
+using namespace viz;
 using namespace std;
+
+// --- Data Structures ---
 
 enum RADIAL_STATE {
     WAIT_SPAWN,
@@ -15,6 +19,12 @@ enum RADIAL_STATE {
 };
 
 RADIAL_STATE radial_state = WAIT_SPAWN;
+
+// --- Global Variables
+
+vector<Color> radial_colors = {Color(255,0,0), Color(0,255,0), Color(0,0,255)};
+
+// --- Constants ---
 
 const int HUE_SLIDER_MAX = 179;
 int hue_min_slider = 112;
@@ -30,9 +40,11 @@ int val_max_slider = VAL_SLIDER_MAX;
 
 const int CONTOUR_AREA_TRESHOLD = 625;
 
+// --- Function Headers ---
+
 void overlay_mats(const Mat& top_layer, const Mat& bottom_layer, Mat& output_mat);
 bool check_move(Point prev_pos, Point current_pos, int move_treshold);
-
+void draw_colorwheel(Mat& canvas, const Point& center, int radius, int thickness, const vector<Color>& colors);
 
 int main(int, char**){
     VideoCapture cap(0, CAP_V4L2);
@@ -186,7 +198,8 @@ int main(int, char**){
                                 // PLACEHOLDER LOGIC
                                 stop_time = getTickCount();
                                 radial_center = Point(smoothed_x, smoothed_y);
-                                ellipse(canvas, radial_center, Size(RADIAL_SIZE, RADIAL_SIZE), 0, 0, 360, Scalar(0, 255, 255), 2);
+
+                                draw_colorwheel(canvas, radial_center, RADIAL_SIZE, RADIAL_SIZE / 3, radial_colors);
                                 
                                 radial_state = WAIT_CHOICE;
                             } else if (radial_state == WAIT_CHOICE) {
@@ -274,8 +287,24 @@ void overlay_mats(const Mat& top_layer, const Mat& bottom_layer, Mat& output_mat
 
     // add top layer to the bottom layer
     output_mat += top_layer;
+
+    return;
 }
 
 bool check_move(Point prev_pos, Point current_pos, int move_treshold){
     return norm(current_pos - prev_pos) > move_treshold;
+}
+
+void draw_colorwheel(Mat& canvas, const Point& center, int radius, int thickness, const vector<Color>& colors){
+    int ncolors = colors.size();
+    int start_angle, end_angle;
+
+    for (int i = 0; i < ncolors; ++i) {
+        start_angle = 0 + i * 360 / ncolors;
+        end_angle = start_angle + 360 / ncolors;
+
+        ellipse(canvas, center, Size(radius, radius), 0, start_angle, end_angle, colors[i], thickness);
+    }
+
+    return;
 }
