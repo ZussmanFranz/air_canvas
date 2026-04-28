@@ -1,6 +1,7 @@
 #include <iostream>
 #include <vector>
 #include <memory>
+#include <cmath>
 
 #include "opencv2/imgcodecs.hpp"
 #include "opencv2/imgproc.hpp"
@@ -23,6 +24,9 @@ RADIAL_STATE radial_state = WAIT_SPAWN;
 // --- Global Variables
 
 vector<Color> radial_colors = {Color(255,0,0), Color(0,255,0), Color(0,0,255)};
+Color cursor_color = Color(255,0,0);
+
+bool capture_mouse = false;
 
 // --- Constants ---
 
@@ -45,6 +49,14 @@ const int CONTOUR_AREA_TRESHOLD = 625;
 void overlay_mats(const Mat& top_layer, const Mat& bottom_layer, Mat& output_mat);
 bool check_move(Point prev_pos, Point current_pos, int move_treshold);
 void draw_colorwheel(Mat& canvas, const Point& center, int radius, int thickness, const vector<Color>& colors);
+Color determine_color(const Point& wheel_center, const Point& cursor_position, const vector<Color>& colors);
+
+void mouse_callback(int  event, int  x, int  y, int  flag, void *param)
+{
+    if (event == EVENT_MOUSEMOVE && capture_mouse) {
+        cout << "(" << x << ", " << y << ")" << endl;
+    }
+}
 
 int main(int, char**){
     VideoCapture cap(0, CAP_V4L2);
@@ -59,6 +71,8 @@ int main(int, char**){
     namedWindow("mask", WINDOW_NORMAL);
     namedWindow("capture", WINDOW_NORMAL);
 
+    // we are tracking mouse position
+    setMouseCallback("capture", mouse_callback);
 
     createTrackbar("Hue min", "HSV boundaries", &hue_min_slider, HUE_SLIDER_MAX, nullptr);
     createTrackbar("Hue max", "HSV boundaries", &hue_max_slider, HUE_SLIDER_MAX, nullptr);
@@ -99,13 +113,12 @@ int main(int, char**){
     int radial_spawn_time = -1;
     const int RADIAL_LIFETIME_SECONDS = 10;
     const int RADIAL_MOVE_TRESHOLD = 2;
-    const int RADIAL_SPAWN_SECONDS = 4;
+    const int RADIAL_SPAWN_SECONDS = 2;
     double RADIAL_SPAWN_TICKS = RADIAL_SPAWN_SECONDS * getTickFrequency();
     const int RADIAL_SIZE = 60;
     bool is_moving = true;
     double stop_time = -1;
 
-    
 
 
     while(true)
@@ -217,6 +230,7 @@ int main(int, char**){
                                 radial_canvas = Scalar(0,0,0);
 
                                 // change color
+                                cursor_color = determine_color(radial_center, Point(smoothed_x, smoothed_y), radial_colors);
 
                                 radial_state= WAIT_SPAWN;
                             }
@@ -238,8 +252,7 @@ int main(int, char**){
         }
 
         if (prev_x != -1 && prev_y != -1){
-            if (is_moving) circle(display_frame, Point(prev_x, prev_y), 10, Scalar(255, 0, 0), 2);
-            else circle(display_frame, Point(prev_x, prev_y), 10, Scalar(0, 0, 255), 2);
+            circle(display_frame, Point(prev_x, prev_y), 10, cursor_color, 2);
         }
 
         // adding drawing from canvas to display frame
@@ -253,7 +266,7 @@ int main(int, char**){
         
         key_pressed = waitKey(30);
 
-        // 27 == Esc
+        // 27 == Esc, 32 = Space, 109 = m
         if(key_pressed == 27) break;
         if(key_pressed == 32) {
             // reset previous position
@@ -262,6 +275,9 @@ int main(int, char**){
 
             // toggle drawing mode
             capture_drawing = !capture_drawing;
+        }
+        else if (key_pressed == 109) {
+            capture_mouse = !capture_mouse;
         }
     }
     return 0;
@@ -312,4 +328,19 @@ void draw_colorwheel(Mat& canvas, const Point& center, int radius, int thickness
     }
 
     return;
+}
+
+Color determine_color(const Point& wheel_center, const Point& cursor_position, const vector<Color>& colors) {
+    double angle_rad = atan2(cursor_position.y - wheel_center.y, cursor_position.x - wheel_center.x);
+
+    // convert to degrees
+    int angle = abs((int)(angle_rad * 180 / CV_PI) % 360);
+
+    cout << "Angle: " << angle << endl;
+
+    int color_index = angle / (360 / colors.size());
+
+    cout << "Color index: " << color_index << endl;
+
+    return colors[color_index];
 }
