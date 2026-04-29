@@ -1,13 +1,18 @@
 #include <iostream>
 #include <vector>
 #include <memory>
+#include <cmath>
 
 #include "opencv2/imgcodecs.hpp"
 #include "opencv2/imgproc.hpp"
 #include "opencv2/highgui.hpp"
+#include <opencv2/viz/types.hpp>
 
 using namespace cv;
+using namespace viz;
 using namespace std;
+
+// --- Data Structures ---
 
 enum RADIAL_STATE {
     WAIT_SPAWN,
@@ -15,6 +20,19 @@ enum RADIAL_STATE {
 };
 
 RADIAL_STATE radial_state = WAIT_SPAWN;
+
+// --- Global Variables
+
+vector<Color> radial_colors = {Color(255,0,0), Color(0,255,0), Color(0,0,255), Color(0,122,122), Color(122,0,122)};
+Color cursor_color = radial_colors[0];
+
+bool capture_mouse = false;
+Point mouse_pos = Point(-1,-1);
+
+Point cursor_pos = Point(-1,-1);
+Point cursor_pos_prev = Point(-1,-1);
+
+// --- Constants ---
 
 const int HUE_SLIDER_MAX = 179;
 int hue_min_slider = 112;
@@ -30,9 +48,14 @@ int val_max_slider = VAL_SLIDER_MAX;
 
 const int CONTOUR_AREA_TRESHOLD = 625;
 
+// --- Function Headers ---
+
 void overlay_mats(const Mat& top_layer, const Mat& bottom_layer, Mat& output_mat);
 bool check_move(Point prev_pos, Point current_pos, int move_treshold);
+void draw_colorwheel(Mat& canvas, const Point& center, int radius, int thickness, const vector<Color>& colors);
+Color determine_color(const Point& wheel_center, const Point& cursor_position, const vector<Color>& colors);
 
+void mouse_callback(int  event, int  x, int  y, int  flag, void *param);
 
 int main(int, char**){
     VideoCapture cap(0, CAP_V4L2);
@@ -47,6 +70,8 @@ int main(int, char**){
     namedWindow("mask", WINDOW_NORMAL);
     namedWindow("capture", WINDOW_NORMAL);
 
+    // we are tracking mouse position
+    setMouseCallback("capture", mouse_callback);
 
     createTrackbar("Hue min", "HSV boundaries", &hue_min_slider, HUE_SLIDER_MAX, nullptr);
     createTrackbar("Hue max", "HSV boundaries", &hue_max_slider, HUE_SLIDER_MAX, nullptr);
@@ -59,20 +84,14 @@ int main(int, char**){
 
     Mat frame, display_frame, hsv_frame, mask;
 
-    Mat canvas, canvas_mask;
+    Mat canvas, canvas_mask, radial_canvas;
 
     cap >> frame;
     if (frame.empty()) return -1;
 
     // we will be drawing on this canvas, but now it is empty (black)
     canvas = Mat::zeros(frame.size(), CV_8UC3);
-
-    // smoothing logic for flickering cursor
-    int prev_x = -1;
-    int prev_y = -1;
-
-    int smoothed_x = -1;
-    int smoothed_y = -1;
+    radial_canvas = Mat::zeros(frame.size(), CV_8UC3);
 
     int frames_lost = 0;
     const int MAX_FRAMES_LOST = 10;  // how long do we remember the position
@@ -86,13 +105,12 @@ int main(int, char**){
     int radial_spawn_time = -1;
     const int RADIAL_LIFETIME_SECONDS = 10;
     const int RADIAL_MOVE_TRESHOLD = 2;
-    const int RADIAL_SPAWN_SECONDS = 4;
+    const int RADIAL_SPAWN_SECONDS = 2;
     double RADIAL_SPAWN_TICKS = RADIAL_SPAWN_SECONDS * getTickFrequency();
     const int RADIAL_SIZE = 60;
     bool is_moving = true;
     double stop_time = -1;
 
-    
 
 
     while(true)
@@ -137,7 +155,7 @@ int main(int, char**){
 
         bool cursor_found = false;
 
-        if (!contours.empty()){
+        if (capture_mouse || !contours.empty()){
 
             double max_area = 0;
             int max_contour_id = -1;
@@ -151,32 +169,47 @@ int main(int, char**){
                 }
             }
 
-            if (max_contour_id != -1 && max_area > CONTOUR_AREA_TRESHOLD) {
-                Moments m = moments(contours[max_contour_id]);
+            if (capture_mouse || (max_contour_id != -1 && max_area > CONTOUR_AREA_TRESHOLD)) {
+                Moments m;
+                
+                if (!capture_mouse) {
+                    m = moments(contours[max_contour_id]);
+                }
 
                 // calculate it's central coordinates
-                if (m.m00 > 0) {
+                if (capture_mouse || m.m00 > 0) {
                     cursor_found = true;
                     frames_lost = 0;
 
-                    int target_x = m.m10 / m.m00;
-                    int target_y = m.m01 / m.m00;
+                    int target_x, target_y;
+                    
+                    if (capture_mouse){
+                        target_x = mouse_pos.x;
+                        target_y = mouse_pos.y;
 
-                    if (prev_x == -1) {
+                        cout << "target x: " << target_x << " target y: " << target_y << endl;
+                    } else {
+                        target_x = m.m10 / m.m00;
+                        target_y = m.m01 / m.m00;
+                    }
+
+                    if (cursor_pos_prev.x == -1) {
                         // It's first time when we see the cursor, just teleport there
-                        prev_x = target_x;
-                        prev_y = target_y;
+                        cursor_pos.x = target_x;
+                        cursor_pos.y = target_y;
+
+                        cursor_pos_prev = cursor_pos;
                     } else {
                         // smoothing between current and previous position
-                        smoothed_x = prev_x + SMOOTHING * (target_x - prev_x);
-                        smoothed_y = prev_y + SMOOTHING * (target_y - prev_y);
+                        cursor_pos.x = cursor_pos_prev.x + SMOOTHING * (target_x - cursor_pos_prev.x);
+                        cursor_pos.y = cursor_pos_prev.y + SMOOTHING * (target_y - cursor_pos_prev.y);
 
                         if (capture_drawing){
                             // draw a new smoothed line on canvas
-                            line(canvas, Point(prev_x, prev_y), Point(smoothed_x, smoothed_y), Scalar(255, 0, 0), 5);
+                            line(canvas, cursor_pos_prev, cursor_pos, cursor_color, 5);
                         }
 
-                        if (!check_move(Point(prev_x, prev_y), Point(smoothed_x, smoothed_y), RADIAL_MOVE_TRESHOLD)){
+                        if (!check_move(cursor_pos_prev, cursor_pos, RADIAL_MOVE_TRESHOLD)){
                             if (is_moving){
                                 is_moving = false;
                                 stop_time = getTickCount();
@@ -185,28 +218,32 @@ int main(int, char**){
                             if ((radial_state == WAIT_SPAWN) && ((double)(getTickCount() - stop_time) > RADIAL_SPAWN_TICKS)) {
                                 // PLACEHOLDER LOGIC
                                 stop_time = getTickCount();
-                                radial_center = Point(smoothed_x, smoothed_y);
-                                ellipse(canvas, radial_center, Size(RADIAL_SIZE, RADIAL_SIZE), 0, 0, 360, Scalar(0, 255, 255), 2);
+                                radial_center = cursor_pos;
+
+                                draw_colorwheel(radial_canvas, radial_center, RADIAL_SIZE, RADIAL_SIZE / 3, radial_colors);
                                 
                                 radial_state = WAIT_CHOICE;
-                            } else if (radial_state == WAIT_CHOICE) {
-                                // did cursor go out of radial menu?
-
-                                if (check_move(Point(smoothed_x, smoothed_y), radial_center, RADIAL_SIZE)) {
-                                    // clear radial menu
-
-                                    // change color
-
-                                    radial_state= WAIT_SPAWN;
-                                }
-                            }
+                            } 
                         } else {
                             is_moving = true;
                             stop_time = -1;
                         }
 
-                        prev_x = smoothed_x;
-                        prev_y = smoothed_y;
+                        if (radial_state == WAIT_CHOICE) {
+                            // did cursor go out of radial menu?
+
+                            if (check_move(cursor_pos, radial_center, RADIAL_SIZE)) {
+                                // clear radial menu
+                                radial_canvas = Scalar(0,0,0);
+
+                                // change color
+                                cursor_color = determine_color(radial_center, cursor_pos, radial_colors);
+
+                                radial_state= WAIT_SPAWN;
+                            }
+                        }
+
+                        cursor_pos_prev = cursor_pos;
                     }
                 }
             }
@@ -215,19 +252,18 @@ int main(int, char**){
         if (!cursor_found){
             frames_lost++;
             if (frames_lost > MAX_FRAMES_LOST){
-                prev_x = -1;
-                prev_y = -1;
+                cursor_pos_prev = Point(-1,-1);
             }
         }
 
-        if (prev_x != -1 && prev_y != -1){
-            if (is_moving) circle(display_frame, Point(prev_x, prev_y), 10, Scalar(255, 0, 0), 2);
-            else circle(display_frame, Point(prev_x, prev_y), 10, Scalar(0, 0, 255), 2);
+        if (cursor_pos_prev.x != -1 && cursor_pos_prev.y != -1){
+            circle(display_frame, cursor_pos_prev, 10, cursor_color, 2);
         }
 
         // adding drawing from canvas to display frame
 
         overlay_mats(canvas, display_frame, display_frame);
+        overlay_mats(radial_canvas, display_frame, display_frame);
 
         imshow("mask", mask);
 
@@ -235,15 +271,23 @@ int main(int, char**){
         
         key_pressed = waitKey(30);
 
-        // 27 == Esc
+        // 27 == Esc, 32 = Space, 109 = m
         if(key_pressed == 27) break;
         if(key_pressed == 32) {
             // reset previous position
-            prev_x = -1;
-            prev_y = -1;
+            cursor_pos_prev.x = -1;
+            cursor_pos_prev.y = -1;
 
             // toggle drawing mode
             capture_drawing = !capture_drawing;
+        }
+        else if (key_pressed == 109) {
+            capture_mouse = !capture_mouse;
+
+            if (!capture_mouse) {
+                mouse_pos.x = -1;
+                mouse_pos.y = -1;
+            }
         }
     }
     return 0;
@@ -274,8 +318,49 @@ void overlay_mats(const Mat& top_layer, const Mat& bottom_layer, Mat& output_mat
 
     // add top layer to the bottom layer
     output_mat += top_layer;
+
+    return;
 }
 
 bool check_move(Point prev_pos, Point current_pos, int move_treshold){
     return norm(current_pos - prev_pos) > move_treshold;
+}
+
+void draw_colorwheel(Mat& canvas, const Point& center, int radius, int thickness, const vector<Color>& colors){
+    int ncolors = colors.size();
+    int start_angle, end_angle;
+
+    for (int i = 0; i < ncolors; ++i) {
+        start_angle = 0 + i * 360 / ncolors;
+        end_angle = start_angle + 360 / ncolors;
+
+        ellipse(canvas, center, Size(radius, radius), 0, start_angle, end_angle, colors[i], thickness);
+    }
+
+    return;
+}
+
+Color determine_color(const Point& wheel_center, const Point& cursor_position, const vector<Color>& colors) {
+    double angle_rad = atan2(cursor_position.y - wheel_center.y, cursor_position.x - wheel_center.x);
+
+    // convert to degrees
+    int angle = ((int)(angle_rad * 180 / CV_PI) + 360) % 360;
+
+    cout << "Angle: " << angle << endl;
+
+    int color_index = angle / (360 / colors.size());
+
+    cout << "Color index: " << color_index << endl;
+
+    return colors[color_index];
+}
+
+void mouse_callback(int  event, int  x, int  y, int  flag, void *param)
+{
+    if (event == EVENT_MOUSEMOVE && capture_mouse) {
+        mouse_pos.x = x;
+        mouse_pos.y = y;
+
+        // cout << "x: " << x << " y: " << y << endl;
+    }
 }
