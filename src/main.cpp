@@ -258,6 +258,15 @@ int main(int, char**){
 
         if (cursor_pos_prev.x != -1 && cursor_pos_prev.y != -1){
             circle(display_frame, cursor_pos_prev, 10, cursor_color, 2);
+            
+            // draw loading circle
+            if (!is_moving && radial_state == WAIT_SPAWN){
+                float progress = ((double)(getTickCount() - stop_time)) / RADIAL_SPAWN_TICKS;
+
+                cout << progress << endl;
+
+                ellipse(display_frame, cursor_pos_prev, Size(16, 16), 0, 0, (double)(360 * progress), cursor_color, 3);
+            }
         }
 
         // adding drawing from canvas to display frame
