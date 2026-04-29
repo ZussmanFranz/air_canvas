@@ -32,6 +32,11 @@ Point mouse_pos = Point(-1,-1);
 Point cursor_pos = Point(-1,-1);
 Point cursor_pos_prev = Point(-1,-1);
 
+Point radial_center;
+int radial_spawn_time = -1;
+bool is_moving = true;
+double stop_time = -1;
+
 // --- Constants ---
 
 const int HUE_SLIDER_MAX = 179;
@@ -47,6 +52,12 @@ int val_min_slider = 90;
 int val_max_slider = VAL_SLIDER_MAX;
 
 const int CONTOUR_AREA_TRESHOLD = 625;
+
+const int RADIAL_LIFETIME_SECONDS = 10;
+const int RADIAL_MOVE_TRESHOLD = 2;
+const int RADIAL_SPAWN_SECONDS = 2;
+double RADIAL_SPAWN_TICKS = RADIAL_SPAWN_SECONDS * getTickFrequency();
+const int RADIAL_SIZE = 60;
 
 // --- Function Headers ---
 
@@ -100,17 +111,6 @@ int main(int, char**){
     int key_pressed = -1;
 
     bool capture_drawing = false;
-
-    Point radial_center;
-    int radial_spawn_time = -1;
-    const int RADIAL_LIFETIME_SECONDS = 10;
-    const int RADIAL_MOVE_TRESHOLD = 2;
-    const int RADIAL_SPAWN_SECONDS = 2;
-    double RADIAL_SPAWN_TICKS = RADIAL_SPAWN_SECONDS * getTickFrequency();
-    const int RADIAL_SIZE = 60;
-    bool is_moving = true;
-    double stop_time = -1;
-
 
 
     while(true)
