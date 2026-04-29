@@ -344,7 +344,7 @@ Color determine_color(const Point& wheel_center, const Point& cursor_position, c
     double angle_rad = atan2(cursor_position.y - wheel_center.y, cursor_position.x - wheel_center.x);
 
     // convert to degrees
-    int angle = abs((int)(angle_rad * 180 / CV_PI) % 360);
+    int angle = ((int)(angle_rad * 180 / CV_PI) + 360) % 360;
 
     cout << "Angle: " << angle << endl;
 
