@@ -56,7 +56,9 @@ const int CONTOUR_AREA_TRESHOLD = 625;
 const int RADIAL_LIFETIME_SECONDS = 10;
 const int RADIAL_MOVE_TRESHOLD = 2;
 const int RADIAL_SPAWN_SECONDS = 2;
+const int RADIAL_PROGRESS_HEADSTART_SECONDS = 1;
 double RADIAL_SPAWN_TICKS = RADIAL_SPAWN_SECONDS * getTickFrequency();
+double RADIAL_PROGRESS_HEADSTART_TICKS = RADIAL_PROGRESS_HEADSTART_SECONDS * getTickFrequency();
 const int RADIAL_SIZE = 60;
 
 // --- Function Headers ---
@@ -261,7 +263,10 @@ int main(int, char**){
             
             // draw loading circle
             if (!is_moving && radial_state == WAIT_SPAWN){
-                float progress = ((double)(getTickCount() - stop_time)) / RADIAL_SPAWN_TICKS;
+                // TODO: add check for zero devision on AirCanvas object initialization
+                
+                // float progress = max(((double)(getTickCount() - stop_time - RADIAL_PROGRESS_HEADSTART_TICKS)) / RADIAL_SPAWN_TICKS- RADIAL_PROGRESS_HEADSTART_TICKS, 0.0);
+                double progress = max(((double)(getTickCount() - stop_time - RADIAL_PROGRESS_HEADSTART_TICKS)) / (double)(RADIAL_SPAWN_TICKS- RADIAL_PROGRESS_HEADSTART_TICKS), 0.0);
 
                 cout << progress << endl;
 
