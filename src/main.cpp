@@ -53,6 +53,11 @@ int val_max_slider = VAL_SLIDER_MAX;
 
 const int CONTOUR_AREA_TRESHOLD = 625;
 
+const int CURSOR_SIZE = 4;
+const int CURSOR_THICKNESS = 1;
+const int PROGRESS_SIZE = 8;
+const int PROGRESS_THICKNESS = 2;
+
 const int RADIAL_LIFETIME_SECONDS = 10;
 const int RADIAL_MOVE_TRESHOLD = 2;
 const int RADIAL_SPAWN_SECONDS = 2;
@@ -257,7 +262,8 @@ int main(int, char**){
         }
 
         if (cursor_pos_prev.x != -1 && cursor_pos_prev.y != -1){
-            circle(display_frame, cursor_pos_prev, 10, cursor_color, 2);
+            // draw cursor
+            circle(display_frame, cursor_pos_prev, CURSOR_SIZE, cursor_color, CURSOR_THICKNESS);
             
             // draw loading circle
             if (!is_moving && radial_state == WAIT_SPAWN){
@@ -266,9 +272,9 @@ int main(int, char**){
                 // float progress = max(((double)(getTickCount() - stop_time - RADIAL_PROGRESS_HEADSTART_TICKS)) / RADIAL_SPAWN_TICKS- RADIAL_PROGRESS_HEADSTART_TICKS, 0.0);
                 double progress = max(((double)(getTickCount() - stop_time - RADIAL_PROGRESS_HEADSTART_TICKS)) / (double)(RADIAL_SPAWN_TICKS- RADIAL_PROGRESS_HEADSTART_TICKS), 0.0);
 
-                cout << progress << endl;
-
-                ellipse(display_frame, cursor_pos_prev, Size(16, 16), 0, 0, (double)(360 * progress), cursor_color, 3);
+                if (progress >= 0.05) {
+                    ellipse(display_frame, cursor_pos_prev, Size(PROGRESS_SIZE, PROGRESS_SIZE), 0, 0, (double)(360 * progress), cursor_color, PROGRESS_THICKNESS);
+                }
             }
         }
 
