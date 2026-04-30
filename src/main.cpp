@@ -188,8 +188,6 @@ int main(int, char**){
                     if (capture_mouse){
                         target_x = mouse_pos.x;
                         target_y = mouse_pos.y;
-
-                        cout << "target x: " << target_x << " target y: " << target_y << endl;
                     } else {
                         target_x = m.m10 / m.m00;
                         target_y = m.m01 / m.m00;
@@ -360,11 +358,7 @@ Color determine_color(const Point& wheel_center, const Point& cursor_position, c
     // convert to degrees
     int angle = ((int)(angle_rad * 180 / CV_PI) + 360) % 360;
 
-    cout << "Angle: " << angle << endl;
-
     int color_index = angle / (360 / colors.size());
-
-    cout << "Color index: " << color_index << endl;
 
     return colors[color_index];
 }
@@ -374,7 +368,5 @@ void mouse_callback(int  event, int  x, int  y, int  flag, void *param)
     if (event == EVENT_MOUSEMOVE && capture_mouse) {
         mouse_pos.x = x;
         mouse_pos.y = y;
-
-        // cout << "x: " << x << " y: " << y << endl;
     }
 }
