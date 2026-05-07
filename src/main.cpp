@@ -26,6 +26,9 @@ RADIAL_STATE radial_state = WAIT_SPAWN;
 vector<Color> radial_colors = {Color(255,0,0), Color(0,255,0), Color(0,0,255), Color(0,255,255), Color(255,0,255)};
 Color cursor_color = radial_colors[0];
 
+bool fill_background = false;
+Color background_color = Color(255, 255, 255);
+
 bool capture_mouse = false;
 Point mouse_pos = Point(-1,-1);
 
@@ -100,7 +103,7 @@ int main(int, char**){
     createTrackbar("Value min", "HSV boundaries", &val_min_slider, VAL_SLIDER_MAX, nullptr);
     createTrackbar("Value max", "HSV boundaries", &val_max_slider, VAL_SLIDER_MAX, nullptr);
 
-    Mat frame, display_frame, hsv_frame, mask;
+    Mat frame, display_frame, hsv_frame, mask, background;
 
     Mat canvas, canvas_mask, radial_canvas;
 
@@ -110,6 +113,7 @@ int main(int, char**){
     // we will be drawing on this canvas, but now it is empty (black)
     canvas = Mat::zeros(frame.size(), CV_8UC3);
     radial_canvas = Mat::zeros(frame.size(), CV_8UC3);
+    background = Mat(frame.size(), CV_8UC3, background_color);
 
     int frames_lost = 0;
     const int MAX_FRAMES_LOST = 10;  // how long do we remember the position
@@ -132,7 +136,8 @@ int main(int, char**){
         // 1 is a flip flag. Positive value means "flip around Y-axis".
         flip(frame, frame, 1);
 
-        display_frame = frame.clone();
+        if (fill_background) display_frame = background.clone();
+        else display_frame = frame.clone();
 
         medianBlur(frame, frame, 5);    // soft blur to reduce noise and keep edges
 
@@ -279,7 +284,6 @@ int main(int, char**){
         }
 
         // adding drawing from canvas to display frame
-
         overlay_mats(canvas, display_frame, display_frame);
         overlay_mats(radial_canvas, display_frame, display_frame);
 
@@ -289,7 +293,7 @@ int main(int, char**){
         
         key_pressed = waitKey(30);
 
-        // 27 == Esc, 32 = Space, 109 = m
+        // 27 == Esc, 32 = Space, 98 = b, 109 = m
         if(key_pressed == 27) break;
         if(key_pressed == 32) {
             // reset previous position
@@ -298,6 +302,10 @@ int main(int, char**){
 
             // toggle drawing mode
             capture_drawing = !capture_drawing;
+        }
+        else if (key_pressed == 98) {
+            // toggle background fill
+            fill_background = !fill_background;
         }
         else if (key_pressed == 109) {
             capture_mouse = !capture_mouse;
