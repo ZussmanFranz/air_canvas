@@ -23,7 +23,7 @@ RADIAL_STATE radial_state = WAIT_SPAWN;
 
 // --- Global Variables
 
-vector<Color> radial_colors = {Color(255,0,0), Color(0,255,0), Color(0,0,255), Color(0,122,122), Color(122,0,122)};
+vector<Color> radial_colors = {Color(255,0,0), Color(0,255,0), Color(0,0,255), Color(0,255,255), Color(255,0,255)};
 Color cursor_color = radial_colors[0];
 
 bool capture_mouse = false;
