@@ -328,14 +328,8 @@ void overlay_mats(const Mat& top_layer, const Mat& bottom_layer, Mat& output_mat
     // everything not black becomes white
     threshold(top_mask, top_mask, 0, 255, THRESH_BINARY);
 
-    // invert the mask
-    bitwise_not(top_mask, top_mask);
-
-    // crop the overlay area from bottom layer
-    bitwise_and(output_mat, output_mat, output_mat, top_mask);
-
-    // add top layer to the bottom layer
-    output_mat += top_layer;
+    // just write drawing pixels onto output_mat
+    top_layer.copyTo(output_mat, top_mask);
 
     return;
 }
