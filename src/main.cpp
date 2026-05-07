@@ -54,7 +54,7 @@ int val_max_slider = VAL_SLIDER_MAX;
 const int CONTOUR_AREA_TRESHOLD = 625;
 
 const int CURSOR_SIZE = 4;
-const int CURSOR_THICKNESS = 1;
+const int CURSOR_THICKNESS = 2;
 const int PROGRESS_SIZE = 8;
 const int PROGRESS_THICKNESS = 2;
 
