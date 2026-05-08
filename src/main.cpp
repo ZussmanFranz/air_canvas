@@ -121,6 +121,12 @@ int main(int, char**){
 
     Mat canvas, canvas_mask, radial_canvas;
 
+    // kernel for erode and dilate iterations
+    Mat kernel = getStructuringElement(MORPH_ELLIPSE, Size(5,5));
+
+    vector<vector<Point>> contours;
+    vector<Vec4i> hierarchy;
+
     cap >> frame;
     if (frame.empty()) return -1;
 
@@ -171,17 +177,11 @@ int main(int, char**){
         inRange(hsv_frame, lower_bound, upper_bound, mask);
 
 
-        // kernel for erode and dilate iterations
-        Mat kernel = getStructuringElement(MORPH_ELLIPSE, Size(5,5));
-
         // erode - remove "weak" parts of mask
         erode(mask, mask, kernel, Point(-1,-1), 1);
 
         // dilate - make everything that is left stronger and more consistent
         dilate(mask, mask, kernel, Point(-1,-1), 3);  // more iterations to make pointer stronger
-
-        vector<vector<Point>> contours;
-        vector<Vec4i> hierarchy;
 
         findContours(mask, contours, hierarchy, RETR_EXTERNAL, CHAIN_APPROX_SIMPLE);
 
