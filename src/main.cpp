@@ -338,7 +338,7 @@ int main(int, char**){
     }
 
     // update config to save any changes in values
-    load_config(CONFIG_FILENAME);
+    save_config(CONFIG_FILENAME);
     
     return 0;
 }
