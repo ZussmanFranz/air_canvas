@@ -2,11 +2,14 @@
 #include <vector>
 #include <memory>
 #include <cmath>
+#include <fstream>
 
 #include "opencv2/imgcodecs.hpp"
 #include "opencv2/imgproc.hpp"
 #include "opencv2/highgui.hpp"
 #include <opencv2/viz/types.hpp>
+
+#include <toml++/toml.hpp>
 
 using namespace cv;
 using namespace viz;
@@ -43,17 +46,18 @@ bool is_moving = true;
 double stop_time = -1;
 
 // --- Constants ---
+const std::string CONFIG_FILENAME = "config.toml";
 
 const int HUE_SLIDER_MAX = 179;
-int hue_min_slider = 112;
+int hue_min_slider = HUE_SLIDER_MAX;
 int hue_max_slider = HUE_SLIDER_MAX;
 
 const int SAT_SLIDER_MAX = 255;
-int sat_min_slider = 113;
+int sat_min_slider = SAT_SLIDER_MAX;
 int sat_max_slider = SAT_SLIDER_MAX;
 
 const int VAL_SLIDER_MAX = 255;
-int val_min_slider = 90;
+int val_min_slider = VAL_SLIDER_MAX;
 int val_max_slider = VAL_SLIDER_MAX;
 
 const int CONTOUR_AREA_TRESHOLD = 625;
@@ -81,10 +85,16 @@ Color determine_color(const Point& wheel_center, const Point& cursor_position, c
 void mouse_callback(int event, int x, int y, int flag, void *param);
 
 void auto_calibration(const Mat& hsv_frame, int x, int y, int kernel_size, int tolerance);
+void save_config(const std::string& filename);
+void load_config(const std::string& filename);
+
 
 int main(int, char**){
     VideoCapture cap(0, CAP_V4L2);
     if(!cap.isOpened()) return -1;
+
+    // load config before everything is initialized
+    load_config(CONFIG_FILENAME);
 
     cap.set(CAP_PROP_FOURCC, VideoWriter::fourcc('M', 'J', 'P', 'G'));
 
@@ -126,7 +136,6 @@ int main(int, char**){
     int key_pressed = -1;
 
     bool capture_drawing = false;
-
 
     while(true)
     {
@@ -327,6 +336,10 @@ int main(int, char**){
             }
         }
     }
+
+    // update config to save any changes in values
+    load_config(CONFIG_FILENAME);
+    
     return 0;
 }
 
@@ -429,4 +442,48 @@ void auto_calibration(const Mat& hsv_frame, int x, int y, int kernel_size, int t
     setTrackbarPos("Satur. max", "HSV boundaries", sat_max_slider);
     setTrackbarPos("Value min", "HSV boundaries", val_min_slider);
     setTrackbarPos("Value max", "HSV boundaries", val_max_slider);
+
+    // save new values to config
+    save_config(CONFIG_FILENAME);
+}
+
+void save_config(const std::string& filename) {
+    toml::table tbl{
+        {"hsv", toml::table{
+            {"hue_min", hue_min_slider},
+            {"hue_max", hue_max_slider},
+            {"sat_min", sat_min_slider},
+            {"sat_max", sat_max_slider},
+            {"val_min", val_min_slider},
+            {"val_max", val_max_slider}
+        }}
+    };
+
+    // write table into file
+    std::ofstream file(filename);
+    if (file.is_open()) {
+        file << tbl;
+        cout << "Successfully saved config to the file " << filename << endl;
+    } else {
+        cerr << "Error: Could not open config file" << endl;
+    }
+}
+
+void load_config(const std::string& filename) {
+    try {
+        auto config = toml::parse_file(filename);
+
+        // reading values from "hsv" toml table
+        hue_min_slider = config["hsv"]["hue_min"].value_or(HUE_SLIDER_MAX);
+        hue_max_slider = config["hsv"]["hue_max"].value_or(HUE_SLIDER_MAX);
+        sat_min_slider = config["hsv"]["sat_min"].value_or(SAT_SLIDER_MAX);
+        sat_max_slider = config["hsv"]["sat_max"].value_or(SAT_SLIDER_MAX);
+        val_min_slider = config["hsv"]["val_min"].value_or(VAL_SLIDER_MAX);
+        val_max_slider = config["hsv"]["val_max"].value_or(VAL_SLIDER_MAX);
+
+        cout << "Config is loaded from " << filename << endl;
+
+    } catch (const toml::parse_error& err) {
+        cout << "Could not find config file. Using default values." << endl;
+    }
 }
