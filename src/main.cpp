@@ -32,6 +32,8 @@ Color background_color = Color(255, 255, 255);
 bool capture_mouse = false;
 Point mouse_pos = Point(-1,-1);
 
+Point calibration_target = Point(-1, -1);
+
 Point cursor_pos = Point(-1,-1);
 Point cursor_pos_prev = Point(-1,-1);
 
@@ -76,7 +78,9 @@ bool check_move(Point prev_pos, Point current_pos, int move_treshold);
 void draw_colorwheel(Mat& canvas, const Point& center, int radius, int thickness, const vector<Color>& colors);
 Color determine_color(const Point& wheel_center, const Point& cursor_position, const vector<Color>& colors);
 
-void mouse_callback(int  event, int  x, int  y, int  flag, void *param);
+void mouse_callback(int event, int x, int y, int flag, void *param);
+
+void auto_calibration(const Mat& hsv_frame, int x, int y, int kernel_size, int tolerance);
 
 int main(int, char**){
     VideoCapture cap(0, CAP_V4L2);
@@ -143,6 +147,13 @@ int main(int, char**){
 
         // convert RGB image to HSV
         cvtColor(frame, hsv_frame, COLOR_BGR2HSV);
+
+        if (calibration_target.x != -1 && calibration_target.y != -1) {
+            auto_calibration(hsv_frame, calibration_target.x, calibration_target.y, 5, 10);
+            
+            // calibrated
+            calibration_target = Point(-1, -1);
+        }
 
         Scalar lower_bound(hue_min_slider, sat_min_slider, val_min_slider);
         Scalar upper_bound(hue_max_slider, sat_max_slider, val_max_slider);
@@ -371,10 +382,51 @@ Color determine_color(const Point& wheel_center, const Point& cursor_position, c
     return colors[color_index];
 }
 
-void mouse_callback(int  event, int  x, int  y, int  flag, void *param)
+void mouse_callback(int event, int x, int y, int flag, void *param)
 {
     if (event == EVENT_MOUSEMOVE && capture_mouse) {
         mouse_pos.x = x;
         mouse_pos.y = y;
+    } else if (!capture_mouse && event == EVENT_LBUTTONDOWN) {
+        calibration_target.x = x;
+        calibration_target.y = y;
     }
+}
+
+void auto_calibration(const Mat& hsv_frame, int x, int y, int kernel_size, int tolerance) {
+    int half_k = kernel_size / 2;
+    
+    int rx = std::max(0, x - half_k);
+    int ry = std::max(0, y - half_k);
+    int rw = std::min(hsv_frame.cols - rx, kernel_size);
+    int rh = std::min(hsv_frame.rows - ry, kernel_size);
+
+    // cut the fragment from image
+    Rect roi(rx, ry, rw, rh);
+    Mat patch = hsv_frame(roi);
+
+    // calculating mean HSV from fragment
+    Scalar mean_hsv = mean(patch);
+
+    // new boundaries
+    
+    // Hue (strict)
+    hue_min_slider = std::max(0, (int)mean_hsv[0] - tolerance);
+    hue_max_slider = std::min(HUE_SLIDER_MAX, (int)mean_hsv[0] + tolerance);
+
+    // Saturation and Value (loose low boundary, max upper boundary)
+
+    sat_min_slider = std::max(0, (int)mean_hsv[1] - tolerance * 3);
+    sat_max_slider = SAT_SLIDER_MAX;
+
+    val_min_slider = std::max(0, (int)mean_hsv[2] - tolerance * 3);
+    val_max_slider = VAL_SLIDER_MAX;
+
+    // synchronize GUI
+    setTrackbarPos("Hue min", "HSV boundaries", hue_min_slider);
+    setTrackbarPos("Hue max", "HSV boundaries", hue_max_slider);
+    setTrackbarPos("Satur. min", "HSV boundaries", sat_min_slider);
+    setTrackbarPos("Satur. max", "HSV boundaries", sat_max_slider);
+    setTrackbarPos("Value min", "HSV boundaries", val_min_slider);
+    setTrackbarPos("Value max", "HSV boundaries", val_max_slider);
 }
