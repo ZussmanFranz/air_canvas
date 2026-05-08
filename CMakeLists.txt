@@ -1,5 +1,17 @@
 cmake_minimum_required(VERSION 3.10)
 
+# enable packages download module
+include(FetchContent)
+
+FetchContent_Declare(
+    tomlplusplus
+    GIT_REPOSITORY https://github.com/marzer/tomlplusplus.git
+    GIT_TAG        v3.4.0
+)
+
+# download toml++ and make available
+FetchContent_MakeAvailable(tomlplusplus)
+
 project(AirCanvasCV)
 
 set(CMAKE_CXX_STANDARD 17)
@@ -18,5 +30,5 @@ add_executable(AirCanvas
     # src/AirCanvas.cpp - I will uncomment it after implementation 
 )
 
-# Linking with OpenCV
-target_link_libraries(AirCanvas ${OpenCV_LIBS})
+# Linking with OpenCV and toml++
+target_link_libraries(AirCanvas ${OpenCV_LIBS} tomlplusplus::tomlplusplus)
