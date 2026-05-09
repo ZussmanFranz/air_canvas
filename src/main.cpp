@@ -3,6 +3,7 @@
 #include <memory>
 #include <cmath>
 #include <fstream>
+#include <algorithm>
 
 #include "opencv2/imgcodecs.hpp"
 #include "opencv2/imgproc.hpp"
@@ -15,89 +16,97 @@ using namespace cv;
 using namespace viz;
 using namespace std;
 
-// --- Data Structures ---
-
+// --- Enums ---
 enum RADIAL_STATE {
     WAIT_SPAWN,
     WAIT_CHOICE
 };
 
-RADIAL_STATE radial_state = WAIT_SPAWN;
+// --- Global Value Containers ---
+struct AppConfig {
+    const std::string CONFIG_FILENAME = "config.toml";
 
-// --- Global Variables
+    const int HUE_SLIDER_MAX = 179;
+    const int SAT_SLIDER_MAX = 255;
+    const int VAL_SLIDER_MAX = 255;
 
-vector<Color> radial_colors = {Color(255,0,0), Color(0,255,0), Color(0,0,255), Color(0,255,255), Color(255,0,255)};
-Color cursor_color = radial_colors[0];
+    const int CONTOUR_AREA_TRESHOLD = 625;
 
-bool fill_background = false;
-Color background_color = Color(255, 255, 255);
+    int hue_min = HUE_SLIDER_MAX, hue_max = HUE_SLIDER_MAX;
+    int sat_min = SAT_SLIDER_MAX, sat_max = SAT_SLIDER_MAX;
+    int val_min = VAL_SLIDER_MAX, val_max = VAL_SLIDER_MAX;
 
-bool capture_mouse = false;
-Point mouse_pos = Point(-1,-1);
+    bool fill_background = false;
+    Color background_color = Color(255, 255, 255);
 
-Point calibration_target = Point(-1, -1);
+    bool capture_mouse = false;
+    Point mouse_pos = Point(-1,-1);
 
-Point cursor_pos = Point(-1,-1);
-Point cursor_pos_prev = Point(-1,-1);
+    Point calibration_target = Point(-1, -1);
+};
 
-Point radial_center;
-int radial_spawn_time = -1;
-bool is_moving = true;
-double stop_time = -1;
+struct Cursor {
+    const int CURSOR_SIZE = 4;
+    const int CURSOR_THICKNESS = 2;
 
-// --- Constants ---
-const std::string CONFIG_FILENAME = "config.toml";
+    Point pos = Point(-1, -1);
+    Point prev_pos = Point(-1, -1);
 
-const int HUE_SLIDER_MAX = 179;
-int hue_min_slider = HUE_SLIDER_MAX;
-int hue_max_slider = HUE_SLIDER_MAX;
+    bool is_moving = true;
+    double stop_time = -1;
 
-const int SAT_SLIDER_MAX = 255;
-int sat_min_slider = SAT_SLIDER_MAX;
-int sat_max_slider = SAT_SLIDER_MAX;
+    Color color;
+};
 
-const int VAL_SLIDER_MAX = 255;
-int val_min_slider = VAL_SLIDER_MAX;
-int val_max_slider = VAL_SLIDER_MAX;
+struct RadialMenu {
+    const int PROGRESS_SIZE = 8;
+    const int PROGRESS_THICKNESS = 2;
 
-const int CONTOUR_AREA_TRESHOLD = 625;
+    const int RADIAL_LIFETIME_SECONDS = 10;
+    const int RADIAL_MOVE_TRESHOLD = 2;
+    const int RADIAL_SPAWN_SECONDS = 2;
+    const int RADIAL_PROGRESS_HEADSTART_SECONDS = 1;
+    const int RADIAL_SIZE = 60;
 
-const int CURSOR_SIZE = 4;
-const int CURSOR_THICKNESS = 2;
-const int PROGRESS_SIZE = 8;
-const int PROGRESS_THICKNESS = 2;
+    double spawn_ticks = 0;
+    double progress_headstart_ticks = 0;
 
-const int RADIAL_LIFETIME_SECONDS = 10;
-const int RADIAL_MOVE_TRESHOLD = 2;
-const int RADIAL_SPAWN_SECONDS = 2;
-const int RADIAL_PROGRESS_HEADSTART_SECONDS = 1;
-double RADIAL_SPAWN_TICKS = RADIAL_SPAWN_SECONDS * getTickFrequency();
-double RADIAL_PROGRESS_HEADSTART_TICKS = RADIAL_PROGRESS_HEADSTART_SECONDS * getTickFrequency();
-const int RADIAL_SIZE = 60;
+    RADIAL_STATE state = WAIT_SPAWN;
+    Point center;
+
+    vector<Color> colors = {Color(255,0,0), Color(0,255,0), Color(0,0,255), Color(0,255,255), Color(255,0,255)};
+};
+
+// --- Global Instances ---
+AppConfig app_config;
+Cursor cursor;
+RadialMenu radial_menu;
 
 // --- Function Headers ---
-
 void overlay_mats(const Mat& top_layer, const Mat& bottom_layer, Mat& output_mat);
 bool check_move(Point prev_pos, Point current_pos, int move_treshold);
 void draw_colorwheel(Mat& canvas, const Point& center, int radius, int thickness, const vector<Color>& colors);
 Color determine_color(const Point& wheel_center, const Point& cursor_position, const vector<Color>& colors);
-
 void mouse_callback(int event, int x, int y, int flag, void *param);
-
 void auto_calibration(const Mat& hsv_frame, int x, int y, int kernel_size, int tolerance);
 void save_config(const std::string& filename);
 void load_config(const std::string& filename);
 
-
+// --- Main ---
 int main(int, char**){
     VideoCapture cap(0, CAP_V4L2);
     if(!cap.isOpened()) return -1;
 
-    // load config before everything is initialized
-    load_config(CONFIG_FILENAME);
+    radial_menu.spawn_ticks = radial_menu.RADIAL_SPAWN_SECONDS * getTickFrequency();
+    radial_menu.progress_headstart_ticks = radial_menu.RADIAL_PROGRESS_HEADSTART_SECONDS * getTickFrequency();
+
+    if (!radial_menu.colors.empty()) {
+        cursor.color = radial_menu.colors[0];
+    }
+
+    load_config(app_config.CONFIG_FILENAME);
 
     cap.set(CAP_PROP_FOURCC, VideoWriter::fourcc('M', 'J', 'P', 'G'));
-
     cap.set(CAP_PROP_FRAME_WIDTH, 1280);
     cap.set(CAP_PROP_FRAME_HEIGHT, 720);
  
@@ -105,23 +114,17 @@ int main(int, char**){
     namedWindow("mask", WINDOW_NORMAL);
     namedWindow("capture", WINDOW_NORMAL);
 
-    // we are tracking mouse position
     setMouseCallback("capture", mouse_callback);
 
-    createTrackbar("Hue min", "HSV boundaries", &hue_min_slider, HUE_SLIDER_MAX, nullptr);
-    createTrackbar("Hue max", "HSV boundaries", &hue_max_slider, HUE_SLIDER_MAX, nullptr);
-
-    createTrackbar("Satur. min", "HSV boundaries", &sat_min_slider, SAT_SLIDER_MAX, nullptr);
-    createTrackbar("Satur. max", "HSV boundaries", &sat_max_slider, SAT_SLIDER_MAX, nullptr);
-
-    createTrackbar("Value min", "HSV boundaries", &val_min_slider, VAL_SLIDER_MAX, nullptr);
-    createTrackbar("Value max", "HSV boundaries", &val_max_slider, VAL_SLIDER_MAX, nullptr);
+    createTrackbar("Hue min", "HSV boundaries", &app_config.hue_min, app_config.HUE_SLIDER_MAX, nullptr);
+    createTrackbar("Hue max", "HSV boundaries", &app_config.hue_max, app_config.HUE_SLIDER_MAX, nullptr);
+    createTrackbar("Satur. min", "HSV boundaries", &app_config.sat_min, app_config.SAT_SLIDER_MAX, nullptr);
+    createTrackbar("Satur. max", "HSV boundaries", &app_config.sat_max, app_config.SAT_SLIDER_MAX, nullptr);
+    createTrackbar("Value min", "HSV boundaries", &app_config.val_min, app_config.VAL_SLIDER_MAX, nullptr);
+    createTrackbar("Value max", "HSV boundaries", &app_config.val_max, app_config.VAL_SLIDER_MAX, nullptr);
 
     Mat frame, display_frame, hsv_frame, mask, background;
-
     Mat canvas, canvas_mask, radial_canvas;
-
-    // kernel for erode and dilate iterations
     Mat kernel = getStructuringElement(MORPH_ELLIPSE, Size(5,5));
 
     vector<vector<Point>> contours;
@@ -130,17 +133,14 @@ int main(int, char**){
     cap >> frame;
     if (frame.empty()) return -1;
 
-    // we will be drawing on this canvas, but now it is empty (black)
     canvas = Mat::zeros(frame.size(), CV_8UC3);
     radial_canvas = Mat::zeros(frame.size(), CV_8UC3);
-    background = Mat(frame.size(), CV_8UC3, background_color);
+    background = Mat(frame.size(), CV_8UC3, app_config.background_color);
 
     int frames_lost = 0;
-    const int MAX_FRAMES_LOST = 10;  // how long do we remember the position
-    const float SMOOTHING = 0.35f;   // smoothing factor (from 0.1 to 1.0)
-
+    const int MAX_FRAMES_LOST = 10;
+    const float SMOOTHING = 0.35f;
     int key_pressed = -1;
-
     bool capture_drawing = false;
 
     while(true)
@@ -151,48 +151,36 @@ int main(int, char**){
            continue;
         }
 
-        // flip the image to better control our drawing.
-        // 1 is a flip flag. Positive value means "flip around Y-axis".
         flip(frame, frame, 1);
 
-        if (fill_background) display_frame = background.clone();
+        if (app_config.fill_background) display_frame = background.clone();
         else display_frame = frame.clone();
 
-        medianBlur(frame, frame, 5);    // soft blur to reduce noise and keep edges
-
-        // convert RGB image to HSV
+        medianBlur(frame, frame, 5);
         cvtColor(frame, hsv_frame, COLOR_BGR2HSV);
 
-        if (calibration_target.x != -1 && calibration_target.y != -1) {
-            auto_calibration(hsv_frame, calibration_target.x, calibration_target.y, 5, 10);
-            
-            // calibrated
-            calibration_target = Point(-1, -1);
+        if (app_config.calibration_target.x != -1 && app_config.calibration_target.y != -1) {
+            auto_calibration(hsv_frame, app_config.calibration_target.x, app_config.calibration_target.y, 5, 10);
+            app_config.calibration_target = Point(-1, -1);
         }
 
-        Scalar lower_bound(hue_min_slider, sat_min_slider, val_min_slider);
-        Scalar upper_bound(hue_max_slider, sat_max_slider, val_max_slider);
+        Scalar lower_bound(app_config.hue_min, app_config.sat_min, app_config.val_min);
+        Scalar upper_bound(app_config.hue_max, app_config.sat_max, app_config.val_max);
         
-        // create a mask of white pixels fitting in boundaries
-        inRange(hsv_frame, lower_bound, upper_bound, mask);
-
-
+        inRange(hsv_frame, lower_bound, upper_bound, mask);        // erode - remove "weak" parts of mask
         // erode - remove "weak" parts of mask
         erode(mask, mask, kernel, Point(-1,-1), 1);
-
         // dilate - make everything that is left stronger and more consistent
-        dilate(mask, mask, kernel, Point(-1,-1), 3);  // more iterations to make pointer stronger
+        dilate(mask, mask, kernel, Point(-1,-1), 3);
 
         findContours(mask, contours, hierarchy, RETR_EXTERNAL, CHAIN_APPROX_SIMPLE);
 
         bool cursor_found = false;
 
-        if (capture_mouse || !contours.empty()){
-
+        if (app_config.capture_mouse || !contours.empty()){
             double max_area = 0;
             int max_contour_id = -1;
 
-            // find a contour with maximum area
             for (size_t i = 0; i < contours.size(); i++) {
                 double area = contourArea(contours[i]);
                 if (area > max_area) {
@@ -201,79 +189,69 @@ int main(int, char**){
                 }
             }
 
-            if (capture_mouse || (max_contour_id != -1 && max_area > CONTOUR_AREA_TRESHOLD)) {
+            if (app_config.capture_mouse || (max_contour_id != -1 && max_area > app_config.CONTOUR_AREA_TRESHOLD)) {
                 Moments m;
-                
-                if (!capture_mouse) {
+                if (!app_config.capture_mouse) {
                     m = moments(contours[max_contour_id]);
                 }
 
                 // calculate it's central coordinates
-                if (capture_mouse || m.m00 > 0) {
+                if (app_config.capture_mouse || m.m00 > 0) {
                     cursor_found = true;
                     frames_lost = 0;
 
                     int target_x, target_y;
                     
-                    if (capture_mouse){
-                        target_x = mouse_pos.x;
-                        target_y = mouse_pos.y;
+                    if (app_config.capture_mouse){
+                        target_x = app_config.mouse_pos.x;
+                        target_y = app_config.mouse_pos.y;
                     } else {
                         target_x = m.m10 / m.m00;
                         target_y = m.m01 / m.m00;
                     }
 
-                    if (cursor_pos_prev.x == -1) {
+                    if (cursor.prev_pos.x == -1) {
                         // It's first time when we see the cursor, just teleport there
-                        cursor_pos.x = target_x;
-                        cursor_pos.y = target_y;
-
-                        cursor_pos_prev = cursor_pos;
+                        cursor.pos.x = target_x;
+                        cursor.pos.y = target_y;
+                        cursor.prev_pos = cursor.pos;
                     } else {
                         // smoothing between current and previous position
-                        cursor_pos.x = cursor_pos_prev.x + SMOOTHING * (target_x - cursor_pos_prev.x);
-                        cursor_pos.y = cursor_pos_prev.y + SMOOTHING * (target_y - cursor_pos_prev.y);
+                        cursor.pos.x = cursor.prev_pos.x + SMOOTHING * (target_x - cursor.prev_pos.x);
+                        cursor.pos.y = cursor.prev_pos.y + SMOOTHING * (target_y - cursor.prev_pos.y);
 
                         if (capture_drawing){
                             // draw a new smoothed line on canvas
-                            line(canvas, cursor_pos_prev, cursor_pos, cursor_color, 5);
+                            line(canvas, cursor.prev_pos, cursor.pos, cursor.color, 5);
                         }
 
-                        if (!check_move(cursor_pos_prev, cursor_pos, RADIAL_MOVE_TRESHOLD)){
-                            if (is_moving){
-                                is_moving = false;
-                                stop_time = getTickCount();
+                        if (!check_move(cursor.prev_pos, cursor.pos, radial_menu.RADIAL_MOVE_TRESHOLD)){
+                            if (cursor.is_moving){
+                                cursor.is_moving = false;
+                                cursor.stop_time = getTickCount();
                             }
 
-                            if ((radial_state == WAIT_SPAWN) && ((double)(getTickCount() - stop_time) > RADIAL_SPAWN_TICKS)) {
-                                // PLACEHOLDER LOGIC
-                                stop_time = getTickCount();
-                                radial_center = cursor_pos;
+                            if ((radial_menu.state == WAIT_SPAWN) && ((double)(getTickCount() - cursor.stop_time) > radial_menu.spawn_ticks)) {
+                                cursor.stop_time = getTickCount();
+                                radial_menu.center = cursor.pos;
 
-                                draw_colorwheel(radial_canvas, radial_center, RADIAL_SIZE, RADIAL_SIZE / 3, radial_colors);
-                                
-                                radial_state = WAIT_CHOICE;
+                                draw_colorwheel(radial_canvas, radial_menu.center, radial_menu.RADIAL_SIZE, radial_menu.RADIAL_SIZE / 3, radial_menu.colors);
+                                radial_menu.state = WAIT_CHOICE;
                             } 
                         } else {
-                            is_moving = true;
-                            stop_time = -1;
+                            cursor.is_moving = true;
+                            cursor.stop_time = -1;
                         }
 
-                        if (radial_state == WAIT_CHOICE) {
-                            // did cursor go out of radial menu?
-
-                            if (check_move(cursor_pos, radial_center, RADIAL_SIZE)) {
-                                // clear radial menu
+                        if (radial_menu.state == WAIT_CHOICE) {
+                            if (check_move(cursor.pos, radial_menu.center, radial_menu.RADIAL_SIZE)) {
                                 radial_canvas = Scalar(0,0,0);
-
-                                // change color
-                                cursor_color = determine_color(radial_center, cursor_pos, radial_colors);
-
-                                radial_state= WAIT_SPAWN;
+                                cursor.color = determine_color(radial_menu.center, cursor.pos, radial_menu.colors);
+                                radial_menu.state = WAIT_SPAWN;
                             }
                         }
 
-                        cursor_pos_prev = cursor_pos;
+                        cursor.prev_pos = cursor.pos;
                     }
                 }
             }
@@ -282,88 +260,60 @@ int main(int, char**){
         if (!cursor_found){
             frames_lost++;
             if (frames_lost > MAX_FRAMES_LOST){
-                cursor_pos_prev = Point(-1,-1);
+                cursor.prev_pos = Point(-1,-1);
             }
         }
 
-        if (cursor_pos_prev.x != -1 && cursor_pos_prev.y != -1){
-            // draw cursor
-            circle(display_frame, cursor_pos_prev, CURSOR_SIZE, cursor_color, CURSOR_THICKNESS);
+        if (cursor.prev_pos.x != -1 && cursor.prev_pos.y != -1){
+            circle(display_frame, cursor.prev_pos, cursor.CURSOR_SIZE, cursor.color, cursor.CURSOR_THICKNESS);
             
-            // draw loading circle
-            if (!is_moving && radial_state == WAIT_SPAWN){
-                // TODO: add check for zero devision on AirCanvas object initialization
-                
-                // float progress = max(((double)(getTickCount() - stop_time - RADIAL_PROGRESS_HEADSTART_TICKS)) / RADIAL_SPAWN_TICKS- RADIAL_PROGRESS_HEADSTART_TICKS, 0.0);
-                double progress = max(((double)(getTickCount() - stop_time - RADIAL_PROGRESS_HEADSTART_TICKS)) / (double)(RADIAL_SPAWN_TICKS- RADIAL_PROGRESS_HEADSTART_TICKS), 0.0);
+            if (!cursor.is_moving && radial_menu.state == WAIT_SPAWN){
+                double progress = max(((double)(getTickCount() - cursor.stop_time - radial_menu.progress_headstart_ticks)) / (double)(radial_menu.spawn_ticks - radial_menu.progress_headstart_ticks), 0.0);
 
                 if (progress >= 0.05) {
-                    ellipse(display_frame, cursor_pos_prev, Size(PROGRESS_SIZE, PROGRESS_SIZE), 0, 0, (double)(360 * progress), cursor_color, PROGRESS_THICKNESS);
+                    ellipse(display_frame, cursor.prev_pos, Size(radial_menu.PROGRESS_SIZE, radial_menu.PROGRESS_SIZE), 0, 0, (double)(360 * progress), cursor.color, radial_menu.PROGRESS_THICKNESS);
                 }
             }
         }
 
-        // adding drawing from canvas to display frame
         overlay_mats(canvas, display_frame, display_frame);
         overlay_mats(radial_canvas, display_frame, display_frame);
 
         imshow("mask", mask);
-
         imshow("capture", display_frame);
         
         key_pressed = waitKey(30);
 
-        // 27 == Esc, 32 = Space, 98 = b, 109 = m
         if(key_pressed == 27) break;
         if(key_pressed == 32) {
-            // reset previous position
-            cursor_pos_prev.x = -1;
-            cursor_pos_prev.y = -1;
-
-            // toggle drawing mode
+            cursor.prev_pos.x = -1;
+            cursor.prev_pos.y = -1;
             capture_drawing = !capture_drawing;
         }
         else if (key_pressed == 98) {
-            // toggle background fill
-            fill_background = !fill_background;
+            app_config.fill_background = !app_config.fill_background;
         }
         else if (key_pressed == 109) {
-            capture_mouse = !capture_mouse;
-
-            if (!capture_mouse) {
-                mouse_pos.x = -1;
-                mouse_pos.y = -1;
+            app_config.capture_mouse = !app_config.capture_mouse;
+            if (!app_config.capture_mouse) {
+                app_config.mouse_pos.x = -1;
+                app_config.mouse_pos.y = -1;
             }
         }
     }
 
-    // update config to save any changes in values
-    save_config(CONFIG_FILENAME);
-    
+    save_config(app_config.CONFIG_FILENAME);
     return 0;
 }
 
+// --- Implementations ---
 
 void overlay_mats(const Mat& top_layer, const Mat& bottom_layer, Mat& output_mat) {
-    /*
-        Overlays mats. Puts non-black pixels of top layer on bottom layer.
-    */
-
     Mat top_mask;
-
-    // copy bottom_layer content to output_mat
     output_mat = bottom_layer.clone();
-
-    // convert top_layer to grayscale
     cvtColor(top_layer, top_mask, COLOR_BGR2GRAY);
-
-    // everything not black becomes white
     threshold(top_mask, top_mask, 0, 255, THRESH_BINARY);
-
-    // just write drawing pixels onto output_mat
     top_layer.copyTo(output_mat, top_mask);
-
-    return;
 }
 
 bool check_move(Point prev_pos, Point current_pos, int move_treshold){
@@ -380,86 +330,65 @@ void draw_colorwheel(Mat& canvas, const Point& center, int radius, int thickness
 
         ellipse(canvas, center, Size(radius, radius), 0, start_angle, end_angle, colors[i], thickness);
     }
-
-    return;
 }
 
 Color determine_color(const Point& wheel_center, const Point& cursor_position, const vector<Color>& colors) {
     double angle_rad = atan2(cursor_position.y - wheel_center.y, cursor_position.x - wheel_center.x);
-
-    // convert to degrees
     int angle = ((int)(angle_rad * 180 / CV_PI) + 360) % 360;
-
     int color_index = angle / (360 / colors.size());
-
     return colors[color_index];
 }
 
-void mouse_callback(int event, int x, int y, int flag, void *param)
-{
-    if (event == EVENT_MOUSEMOVE && capture_mouse) {
-        mouse_pos.x = x;
-        mouse_pos.y = y;
-    } else if (!capture_mouse && event == EVENT_LBUTTONDOWN) {
-        calibration_target.x = x;
-        calibration_target.y = y;
+void mouse_callback(int event, int x, int y, int flag, void *param) {
+    if (event == EVENT_MOUSEMOVE && app_config.capture_mouse) {
+        app_config.mouse_pos.x = x;
+        app_config.mouse_pos.y = y;
+    } else if (!app_config.capture_mouse && event == EVENT_LBUTTONDOWN) {
+        app_config.calibration_target.x = x;
+        app_config.calibration_target.y = y;
     }
 }
 
 void auto_calibration(const Mat& hsv_frame, int x, int y, int kernel_size, int tolerance) {
     int half_k = kernel_size / 2;
-    
     int rx = std::max(0, x - half_k);
     int ry = std::max(0, y - half_k);
     int rw = std::min(hsv_frame.cols - rx, kernel_size);
     int rh = std::min(hsv_frame.rows - ry, kernel_size);
 
-    // cut the fragment from image
     Rect roi(rx, ry, rw, rh);
     Mat patch = hsv_frame(roi);
-
-    // calculating mean HSV from fragment
     Scalar mean_hsv = mean(patch);
 
-    // new boundaries
-    
-    // Hue (strict)
-    hue_min_slider = std::max(0, (int)mean_hsv[0] - tolerance);
-    hue_max_slider = std::min(HUE_SLIDER_MAX, (int)mean_hsv[0] + tolerance);
+    app_config.hue_min = std::clamp((int)mean_hsv[0] - tolerance, 0, app_config.HUE_SLIDER_MAX);
+    app_config.hue_max = std::clamp((int)mean_hsv[0] + tolerance, 0, app_config.HUE_SLIDER_MAX);
+    app_config.sat_min = std::clamp((int)mean_hsv[1] - tolerance * 3, 0, app_config.SAT_SLIDER_MAX);
+    app_config.sat_max = app_config.SAT_SLIDER_MAX;
+    app_config.val_min = std::clamp((int)mean_hsv[2] - tolerance * 3, 0, app_config.VAL_SLIDER_MAX);
+    app_config.val_max = app_config.VAL_SLIDER_MAX;
 
-    // Saturation and Value (loose low boundary, max upper boundary)
+    setTrackbarPos("Hue min", "HSV boundaries", app_config.hue_min);
+    setTrackbarPos("Hue max", "HSV boundaries", app_config.hue_max);
+    setTrackbarPos("Satur. min", "HSV boundaries", app_config.sat_min);
+    setTrackbarPos("Satur. max", "HSV boundaries", app_config.sat_max);
+    setTrackbarPos("Value min", "HSV boundaries", app_config.val_min);
+    setTrackbarPos("Value max", "HSV boundaries", app_config.val_max);
 
-    sat_min_slider = std::max(0, (int)mean_hsv[1] - tolerance * 3);
-    sat_max_slider = SAT_SLIDER_MAX;
-
-    val_min_slider = std::max(0, (int)mean_hsv[2] - tolerance * 3);
-    val_max_slider = VAL_SLIDER_MAX;
-
-    // synchronize GUI
-    setTrackbarPos("Hue min", "HSV boundaries", hue_min_slider);
-    setTrackbarPos("Hue max", "HSV boundaries", hue_max_slider);
-    setTrackbarPos("Satur. min", "HSV boundaries", sat_min_slider);
-    setTrackbarPos("Satur. max", "HSV boundaries", sat_max_slider);
-    setTrackbarPos("Value min", "HSV boundaries", val_min_slider);
-    setTrackbarPos("Value max", "HSV boundaries", val_max_slider);
-
-    // save new values to config
-    save_config(CONFIG_FILENAME);
+    save_config(app_config.CONFIG_FILENAME);
 }
 
 void save_config(const std::string& filename) {
     toml::table tbl{
         {"hsv", toml::table{
-            {"hue_min", hue_min_slider},
-            {"hue_max", hue_max_slider},
-            {"sat_min", sat_min_slider},
-            {"sat_max", sat_max_slider},
-            {"val_min", val_min_slider},
-            {"val_max", val_max_slider}
+            {"hue_min", app_config.hue_min},
+            {"hue_max", app_config.hue_max},
+            {"sat_min", app_config.sat_min},
+            {"sat_max", app_config.sat_max},
+            {"val_min", app_config.val_min},
+            {"val_max", app_config.val_max}
         }}
     };
 
-    // write table into file
     std::ofstream file(filename);
     if (file.is_open()) {
         file << tbl;
@@ -473,16 +402,14 @@ void load_config(const std::string& filename) {
     try {
         auto config = toml::parse_file(filename);
 
-        // reading values from "hsv" toml table
-        hue_min_slider = config["hsv"]["hue_min"].value_or(HUE_SLIDER_MAX);
-        hue_max_slider = config["hsv"]["hue_max"].value_or(HUE_SLIDER_MAX);
-        sat_min_slider = config["hsv"]["sat_min"].value_or(SAT_SLIDER_MAX);
-        sat_max_slider = config["hsv"]["sat_max"].value_or(SAT_SLIDER_MAX);
-        val_min_slider = config["hsv"]["val_min"].value_or(VAL_SLIDER_MAX);
-        val_max_slider = config["hsv"]["val_max"].value_or(VAL_SLIDER_MAX);
+        app_config.hue_min = config["hsv"]["hue_min"].value_or(app_config.HUE_SLIDER_MAX);
+        app_config.hue_max = config["hsv"]["hue_max"].value_or(app_config.HUE_SLIDER_MAX);
+        app_config.sat_min = config["hsv"]["sat_min"].value_or(app_config.SAT_SLIDER_MAX);
+        app_config.sat_max = config["hsv"]["sat_max"].value_or(app_config.SAT_SLIDER_MAX);
+        app_config.val_min = config["hsv"]["val_min"].value_or(app_config.VAL_SLIDER_MAX);
+        app_config.val_max = config["hsv"]["val_max"].value_or(app_config.VAL_SLIDER_MAX);
 
         cout << "Config is loaded from " << filename << endl;
-
     } catch (const toml::parse_error& err) {
         cout << "Could not find config file. Using default values." << endl;
     }
