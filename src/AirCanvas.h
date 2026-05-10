@@ -94,7 +94,10 @@ private:
     void handleInput();
 
     // utilities
+    
     static void staticMouseCallback(int event, int x, int y, int flag, void* param);
+    static void staticTrackbarCallback(int pos, void* userdata);
+
     void handleMouse(int event, int x, int y);
     void setupWindows();
     void autoCalibration(int x, int y, int kernel_size, int tolerance);

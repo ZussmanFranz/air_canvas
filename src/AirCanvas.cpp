@@ -208,6 +208,14 @@ void AirCanvas::staticMouseCallback(int event, int x, int y, int flag, void* par
     app->handleMouse(event, x, y);
 }
 
+// OpenCV requirement for trackbars
+void AirCanvas::staticTrackbarCallback(int pos, void* userdata) {
+    if (userdata) {
+        int* target_variable = static_cast<int*>(userdata);
+        *target_variable = pos;
+    }
+}
+
 void AirCanvas::handleMouse(int event, int x, int y) {
     if (event == EVENT_MOUSEMOVE && config.capture_mouse) {
         config.mouse_pos = Point(x, y);
@@ -221,15 +229,23 @@ void AirCanvas::setupWindows() {
     namedWindow("mask", WINDOW_NORMAL);
     namedWindow("capture", WINDOW_NORMAL);
 
-    // we are passing "this" so that setMouseCallback can use class method
     setMouseCallback("capture", AirCanvas::staticMouseCallback, this);
 
-    createTrackbar("Hue min", "HSV boundaries", &config.hue_min, config.HUE_SLIDER_MAX, nullptr);
-    createTrackbar("Hue max", "HSV boundaries", &config.hue_max, config.HUE_SLIDER_MAX, nullptr);
-    createTrackbar("Satur. min", "HSV boundaries", &config.sat_min, config.SAT_SLIDER_MAX, nullptr);
-    createTrackbar("Satur. max", "HSV boundaries", &config.sat_max, config.SAT_SLIDER_MAX, nullptr);
-    createTrackbar("Value min", "HSV boundaries", &config.val_min, config.VAL_SLIDER_MAX, nullptr);
-    createTrackbar("Value max", "HSV boundaries", &config.val_max, config.VAL_SLIDER_MAX, nullptr);
+    // initialize trackbars with null pointers
+    createTrackbar("Hue min", "HSV boundaries", nullptr, config.HUE_SLIDER_MAX, AirCanvas::staticTrackbarCallback, &config.hue_min);
+    createTrackbar("Hue max", "HSV boundaries", nullptr, config.HUE_SLIDER_MAX, AirCanvas::staticTrackbarCallback, &config.hue_max);
+    createTrackbar("Satur. min", "HSV boundaries", nullptr, config.SAT_SLIDER_MAX, AirCanvas::staticTrackbarCallback, &config.sat_min);
+    createTrackbar("Satur. max", "HSV boundaries", nullptr, config.SAT_SLIDER_MAX, AirCanvas::staticTrackbarCallback, &config.sat_max);
+    createTrackbar("Value min", "HSV boundaries", nullptr, config.VAL_SLIDER_MAX, AirCanvas::staticTrackbarCallback, &config.val_min);
+    createTrackbar("Value max", "HSV boundaries", nullptr, config.VAL_SLIDER_MAX, AirCanvas::staticTrackbarCallback, &config.val_max);
+
+    // set trackbar values
+    setTrackbarPos("Hue min", "HSV boundaries", config.hue_min);
+    setTrackbarPos("Hue max", "HSV boundaries", config.hue_max);
+    setTrackbarPos("Satur. min", "HSV boundaries", config.sat_min);
+    setTrackbarPos("Satur. max", "HSV boundaries", config.sat_max);
+    setTrackbarPos("Value min", "HSV boundaries", config.val_min);
+    setTrackbarPos("Value max", "HSV boundaries", config.val_max);
 }
 
 void AirCanvas::autoCalibration(int x, int y, int kernel_size, int tolerance) {
