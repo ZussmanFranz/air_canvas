@@ -27,7 +27,7 @@ include_directories(src)
 
 add_executable(AirCanvas 
     src/main.cpp 
-    # src/AirCanvas.cpp - I will uncomment it after implementation 
+    src/AirCanvas.cpp 
 )
 
 # Linking with OpenCV and toml++
