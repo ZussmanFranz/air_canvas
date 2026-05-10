@@ -81,10 +81,17 @@ private:
     const int MAX_FRAMES_LOST = 10;
     const float SMOOTHING = 0.35f;
 
+    bool show_mask = true;
+    bool show_hsv_boundaries = true;
+
 public:
     AirCanvas();
     ~AirCanvas();
+
     void run();
+
+    void set_mask_visibility(bool visible);
+    void set_hsv_boundaries_visibility(bool visible);
 
 private:
     void processVision();
@@ -100,6 +107,7 @@ private:
 
     void handleMouse(int event, int x, int y);
     void setupWindows();
+    void setupTrackbarWindow();
     void autoCalibration(int x, int y, int kernel_size, int tolerance);
     void overlayMats(const cv::Mat& top_layer, const cv::Mat& bottom_layer, cv::Mat& output_mat);
     bool checkMove(cv::Point prev_pos, cv::Point current_pos, int threshold_val);

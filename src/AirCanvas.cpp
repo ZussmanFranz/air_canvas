@@ -35,6 +35,8 @@ AirCanvas::AirCanvas() {
         canvas = Mat::zeros(frame.size(), CV_8UC3);
         radial_canvas = Mat::zeros(frame.size(), CV_8UC3);
         background = Mat(frame.size(), CV_8UC3, config.background_color);
+    } else {
+        cerr << "Could not parse the test frame." << endl;
     }
     
     kernel = getStructuringElement(MORPH_ELLIPSE, Size(5,5));
@@ -61,6 +63,40 @@ void AirCanvas::run() {
         updateLogic();    // tracking
         renderUI();       // drawing
         handleInput();    // input
+    }
+}
+
+// --- Setters ---
+
+void AirCanvas::set_mask_visibility(bool visible) {
+    if (show_mask == visible) return;
+    
+    show_mask = visible;
+    if (show_mask) {
+        namedWindow("mask", WINDOW_NORMAL);
+    } else {
+        try { 
+            destroyWindow("mask"); 
+        } 
+        catch (const cv::Exception& e) {
+            cout << "Warning: Mask window is already closed." << endl;
+        }
+    }
+}
+
+void AirCanvas::set_hsv_boundaries_visibility(bool visible) {
+    if (show_hsv_boundaries == visible) return;
+    
+    show_hsv_boundaries = visible;
+    if (show_hsv_boundaries) {
+        setupTrackbarWindow();
+    } else {
+        try { 
+            destroyWindow("HSV boundaries"); 
+        } 
+        catch (const cv::Exception& e) {
+            cout << "Warning: HSV Boundaries window is already closed." << endl;
+        }
     }
 }
 
@@ -181,7 +217,8 @@ void AirCanvas::renderUI() {
     overlayMats(canvas, display_frame, display_frame);
     overlayMats(radial_canvas, display_frame, display_frame);
 
-    imshow("mask", mask);
+    if (show_mask) imshow("mask", mask);
+
     imshow("capture", display_frame);
 }
 
@@ -225,11 +262,15 @@ void AirCanvas::handleMouse(int event, int x, int y) {
 }
 
 void AirCanvas::setupWindows() {
-    namedWindow("HSV boundaries", WINDOW_NORMAL);
-    namedWindow("mask", WINDOW_NORMAL);
-    namedWindow("capture", WINDOW_NORMAL);
+    if (show_mask) namedWindow("mask", WINDOW_NORMAL);
+    if (show_hsv_boundaries) setupTrackbarWindow();
 
+    namedWindow("capture", WINDOW_NORMAL);
     setMouseCallback("capture", AirCanvas::staticMouseCallback, this);
+}
+
+void AirCanvas::setupTrackbarWindow() {
+    namedWindow("HSV boundaries", WINDOW_NORMAL);
 
     // initialize trackbars with null pointers
     createTrackbar("Hue min", "HSV boundaries", nullptr, config.HUE_SLIDER_MAX, AirCanvas::staticTrackbarCallback, &config.hue_min);
