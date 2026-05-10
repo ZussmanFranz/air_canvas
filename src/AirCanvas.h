@@ -13,11 +13,9 @@ enum RADIAL_STATE {
 // --- Data Structures ---
 struct AppConfig {
     const std::string CONFIG_FILENAME = "config.toml";
-
     const int HUE_SLIDER_MAX = 179;
     const int SAT_SLIDER_MAX = 255;
     const int VAL_SLIDER_MAX = 255;
-
     const int CONTOUR_AREA_TRESHOLD = 625;
 
     int hue_min = HUE_SLIDER_MAX, hue_max = HUE_SLIDER_MAX;
@@ -29,45 +27,37 @@ struct AppConfig {
 
     bool capture_mouse = false;
     cv::Point mouse_pos = cv::Point(-1,-1);
-
     cv::Point calibration_target = cv::Point(-1, -1);
 };
 
-struct Cursor {
-    const int CURSOR_SIZE = 4;
-    const int CURSOR_THICKNESS = 2;
-
+struct CursorData {
+    const int SIZE = 4;
+    const int THICKNESS = 2;
     cv::Point pos = cv::Point(-1, -1);
     cv::Point prev_pos = cv::Point(-1, -1);
-
     bool is_moving = true;
     double stop_time = -1;
-
     cv::Scalar color;
 };
 
 struct RadialMenu {
     const int PROGRESS_SIZE = 8;
     const int PROGRESS_THICKNESS = 2;
-
-    const int RADIAL_LIFETIME_SECONDS = 10;
     const int RADIAL_MOVE_TRESHOLD = 2;
-    const int RADIAL_SPAWN_SECONDS = 2;
-    const int RADIAL_PROGRESS_HEADSTART_SECONDS = 1;
     const int RADIAL_SIZE = 60;
-
+    
     double spawn_ticks = 0;
     double progress_headstart_ticks = 0;
 
     RADIAL_STATE state = WAIT_SPAWN;
     cv::Point center;
-
-    vector<cv::Scalar> colors = {
+    std::vector<cv::Scalar> colors = {
         cv::Scalar(255,0,0), 
         cv::Scalar(0,255,0), 
         cv::Scalar(0,0,255), 
         cv::Scalar(0,255,255), 
-        cv::Scalar(255,0,255)};
+        cv::Scalar(255,0,255)
+    };
 };
 
 // --- Class ---
