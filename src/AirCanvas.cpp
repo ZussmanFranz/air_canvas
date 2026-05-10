@@ -306,12 +306,16 @@ void AirCanvas::autoCalibration(int x, int y, int kernel_size, int tolerance) {
     config.val_min = std::clamp((int)mean_hsv[2] - tolerance * 3, 0, config.VAL_SLIDER_MAX);
     config.val_max = config.VAL_SLIDER_MAX;
 
-    setTrackbarPos("Hue min", "HSV boundaries", config.hue_min);
-    setTrackbarPos("Hue max", "HSV boundaries", config.hue_max);
-    setTrackbarPos("Satur. min", "HSV boundaries", config.sat_min);
-    setTrackbarPos("Satur. max", "HSV boundaries", config.sat_max);
-    setTrackbarPos("Value min", "HSV boundaries", config.val_min);
-    setTrackbarPos("Value max", "HSV boundaries", config.val_max);
+    try {
+        setTrackbarPos("Hue min", "HSV boundaries", config.hue_min);
+        setTrackbarPos("Hue max", "HSV boundaries", config.hue_max);
+        setTrackbarPos("Satur. min", "HSV boundaries", config.sat_min);
+        setTrackbarPos("Satur. max", "HSV boundaries", config.sat_max);
+        setTrackbarPos("Value min", "HSV boundaries", config.val_min);
+        setTrackbarPos("Value max", "HSV boundaries", config.val_max);
+    } catch (const cv::Exception& e) {
+        cout << "Warning: Could not change trackbars window" << endl;
+    }
 
     saveConfig();
 }
